@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>學生端｜P112 我來值班</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/common.js"></script>
+</head>
+<body>
+<header class="hero"><div class="container"><nav class="nav"><div class="brand"><div class="brand-mark">P112</div><div>學生端<br><span class="small" id="whoami">Loading...</span></div></div><div class="nav-links"><a href="index.html">首頁</a><button onclick="P112.signOut()">登出</button></div></nav><h1>預約、簽到、簽退。</h1><p class="lead">請到實驗室現場後輸入看板上的六位數動態碼。簽退時需勾選工作項目並填寫摘要。</p></div></header>
+<main class="main"><div class="container grid">
+  <div id="msg" class="notice hidden"></div>
+  <section class="grid three">
+    <div class="card"><h3>累積時數</h3><div class="kpi" id="totalHours">0.00</div><div class="small">依 p112_hour_transactions 加總。</div></div>
+    <div class="card"><h3>目前狀態</h3><div class="kpi" id="activeStatus">-</div><div class="small">若已簽到未簽退，請完成簽退。</div></div>
+    <div class="card"><h3>待辦提醒</h3><div id="reminder" class="small">讀取中...</div></div>
+  </section>
+  <section class="card"><div class="section-title"><h2>可預約時段</h2><button onclick="loadAll()">重新整理</button></div><div class="form-row"><div><label>起始日期</label><input id="fromDate" type="date"></div><div><label>結束日期</label><input id="toDate" type="date"></div></div><p><button class="primary" onclick="loadSlots()">查詢時段</button></p><div class="table-wrap"><table><thead><tr><th>時段</th><th>狀態</th><th>正式值班</th><th>待命</th><th>操作</th></tr></thead><tbody id="slotsBody"></tbody></table></div></section>
+  <section class="grid two">
+    <div class="card"><h2>簽到</h2><p class="small">請選擇您已預約且尚未完成的時段，輸入現場碼簽到。</p><label>預約紀錄</label><select id="checkinReservation"></select><label>現場碼</label><input id="checkinCode" inputmode="numeric" maxlength="6" placeholder="例如 123456"><p><button class="accent" onclick="checkIn()">送出簽到</button></p></div>
+    <div class="card"><h2>簽退</h2><p class="small">簽退會建立工作紀錄與時數交易。至少勾選一項工作，並填寫摘要。</p><label>現場碼</label><input id="checkoutCode" inputmode="numeric" maxlength="6" placeholder="例如 123456"><label>工作項目</label><div id="workItemsBox" class="small"></div><label>工作摘要</label><textarea id="workSummary" placeholder="請簡要說明本次完成內容"></textarea><label>異常回報</label><textarea id="issueReport" placeholder="沒有異常可填：無"></textarea><p><button class="primary" onclick="checkOut()">送出簽退</button></p></div>
+  </section>
+  <section class="card"><div class="section-title"><h2>我的預約與出勤</h2></div><div class="table-wrap"><table><thead><tr><th>時段</th><th>類型</th><th>預約狀態</th><th>簽到</th><th>簽退</th><th>摘要</th></tr></thead><tbody id="myLogsBody"></tbody></table></div></section>
+</div></main>
+<script src="js/student.js"></script>
+</body></html>

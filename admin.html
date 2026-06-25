@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理端｜P112 我來值班</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/common.js"></script>
+</head>
+<body>
+<header class="hero"><div class="container"><nav class="nav"><div class="brand"><div class="brand-mark">P112</div><div>管理端<br><span class="small" id="adminName">Loading...</span></div></div><div class="nav-links"><a href="index.html">首頁</a><a href="display.html">看板</a><button onclick="P112.signOut()">登出</button></div></nav><h1>管理值班制度，<br>保留可稽核紀錄。</h1><p class="lead">建立學生 profile、時段、工作項目、看板裝置，檢視預約、簽到簽退、時數與異常。</p></div></header>
+<main class="main"><div class="container">
+  <div id="adminMsg" class="notice hidden"></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">總覽</button><button class="tab" data-tab="students">學生</button><button class="tab" data-tab="slots">時段</button><button class="tab" data-tab="work">工作項目</button><button class="tab" data-tab="attendance">出勤</button><button class="tab" data-tab="devices">看板裝置</button>
+  </div>
+  <section id="tab-overview" class="tab-panel grid three">
+    <div class="card"><h3>學生數</h3><div class="kpi" id="kpiStudents">0</div></div><div class="card"><h3>開放時段</h3><div class="kpi" id="kpiSlots">0</div></div><div class="card"><h3>異常出勤</h3><div class="kpi" id="kpiAbnormal">0</div></div>
+    <div class="card" style="grid-column:1/-1"><div class="section-title"><h2>學生時數總表</h2><button onclick="exportHours()">匯出 CSV</button></div><div class="table-wrap"><table><thead><tr><th>學生</th><th>Email</th><th>學號/代碼</th><th>累積時數</th></tr></thead><tbody id="hoursBody"></tbody></table></div></div>
+  </section>
+  <section id="tab-students" class="tab-panel hidden card"><h2>學生與角色 Profiles</h2><p class="small">請先到 Supabase Auth 建立使用者，再將該 user id 填入本表。重設密碼請在 Supabase Auth Dashboard 操作。</p><div class="form-row"><div><label>User UUID</label><input id="profileId" placeholder="auth.users id"></div><div><label>Email</label><input id="profileEmail"></div><div><label>姓名</label><input id="profileName"></div><div><label>角色</label><select id="profileRole"><option value="student">student</option><option value="admin">admin</option><option value="display">display</option></select></div><div><label>學生代碼</label><input id="profileCode"></div><div><label>狀態</label><select id="profileStatus"><option value="active">active</option><option value="inactive">inactive</option></select></div></div><p><button class="primary" onclick="saveProfile()">新增 / 更新 Profile</button></p><div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>角色</th><th>狀態</th><th>User ID</th></tr></thead><tbody id="profilesBody"></tbody></table></div></section>
+  <section id="tab-slots" class="tab-panel hidden card"><h2>建立半小時值班時段</h2><div class="form-row"><div><label>日期</label><input id="slotDate" type="date"></div><div><label>開始時間</label><input id="slotStart" type="time" value="09:00"></div><div><label>結束時間</label><input id="slotEnd" type="time" value="17:00"></div><div><label>間隔分鐘</label><input id="slotInterval" type="number" value="30"></div></div><p><button class="primary" onclick="createSlots()">批次建立時段</button></p><div class="table-wrap"><table><thead><tr><th>時段</th><th>狀態</th><th>備註</th></tr></thead><tbody id="adminSlotsBody"></tbody></table></div></section>
+  <section id="tab-work" class="tab-panel hidden grid two"><div class="card"><h2>新增分類</h2><label>分類名稱</label><input id="catName"><label>說明</label><textarea id="catDesc"></textarea><p><button class="primary" onclick="saveCategory()">新增分類</button></p></div><div class="card"><h2>新增工作項目</h2><label>分類</label><select id="itemCategory"></select><label>項目名稱</label><input id="itemName"><label>完成標準</label><textarea id="itemStandard"></textarea><label>預估分鐘</label><input id="itemMinutes" type="number" value="30"><p><button class="primary" onclick="saveWorkItem()">新增項目</button></p></div><div class="card" style="grid-column:1/-1"><h2>工作項目清單</h2><div class="table-wrap"><table><thead><tr><th>分類</th><th>項目</th><th>標準</th><th>預估</th></tr></thead><tbody id="workBody"></tbody></table></div></div></section>
+  <section id="tab-attendance" class="tab-panel hidden card"><div class="section-title"><h2>出勤與工作紀錄</h2><button onclick="exportAttendance()">匯出 CSV</button></div><div class="table-wrap"><table><thead><tr><th>學生</th><th>時段</th><th>簽到</th><th>簽退</th><th>狀態</th><th>摘要</th><th>異常</th></tr></thead><tbody id="attendanceBody"></tbody></table></div></section>
+  <section id="tab-devices" class="tab-panel hidden card"><h2>註冊本機為現場碼看板</h2><p class="small">請在實驗室看板機上登入 admin，再按下註冊。系統會把 token 存在此瀏覽器 localStorage；之後此裝置可用 display 帳號顯示現場碼。</p><label>裝置名稱</label><input id="deviceNameInput" value="實驗室看板機01"><p><button class="accent" onclick="registerDevice()">註冊本機</button></p><div class="table-wrap"><table><thead><tr><th>裝置</th><th>狀態</th><th>最後連線</th><th>Device ID</th></tr></thead><tbody id="devicesBody"></tbody></table></div></section>
+</div></main>
+<script src="js/admin.js"></script>
+</body></html>

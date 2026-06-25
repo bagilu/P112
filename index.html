@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>P112 我來值班｜LabDuty</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/common.js"></script>
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <nav class="nav">
+        <div class="brand"><div class="brand-mark">P112</div><div>我來值班<br><span class="small">LabDuty Management System</span></div></div>
+        <div class="nav-links">
+          <a href="student.html">學生端</a>
+          <a href="admin.html">管理端</a>
+          <a href="display.html">現場碼看板</a>
+        </div>
+      </nav>
+      <div class="hero-grid">
+        <div>
+          <div class="tagline">Laboratory Duty Scheduling · Check-in · Work Logging</div>
+          <h1>值班不是打卡，<br>是責任紀錄。</h1>
+          <p class="lead">P112 用半小時預約、現場動態碼、工作項目清單與時數交易紀錄，協助實驗室管理輪值、待命、工作內容與累積時數。</p>
+        </div>
+        <div class="card">
+          <h2>登入</h2>
+          <p class="small">請使用管理員在 Supabase Auth Dashboard 建立的帳號登入。第一版不提供 Email 忘記密碼，密碼遺失請由管理員重設。</p>
+          <div id="loginMsg" class="notice hidden"></div>
+          <form id="loginForm">
+            <label>Email</label>
+            <input id="email" type="email" autocomplete="username" required>
+            <label>Password</label>
+            <input id="password" type="password" autocomplete="current-password" required>
+            <p><button class="primary" type="submit">登入系統</button></p>
+          </form>
+          <p class="small">尚未設定 config.js 時，本頁會無法連線 Supabase。請先依 docs/deployment_steps.md 操作。</p>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="main">
+    <div class="container grid three">
+      <div class="card"><h3>現場動態碼</h3><p class="small">以 display 專用帳號與授權裝置 token 顯示現場碼，學生簽到與簽退都需輸入。</p></div>
+      <div class="card"><h3>工作項目清單</h3><p class="small">學生簽退時勾選環境整理、設備檢查、展示維護、專案協助或老師指定任務。</p></div>
+      <div class="card"><h3>時數交易紀錄</h3><p class="small">正常出勤、待命 10%、補位與人工調整都以交易形式留下原因。</p></div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">P112 LabDuty MVP · GitHub Pages + Supabase</div></footer>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (window.P112_CONFIG_ERROR) return P112.msg('loginMsg', window.P112_CONFIG_ERROR);
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const { error } = await P112.db.auth.signInWithPassword({ email, password });
+  if (error) return P112.msg('loginMsg', error.message);
+  try {
+    const profile = await P112.getProfile();
+    if (profile.role === 'admin') location.href = 'admin.html';
+    else if (profile.role === 'display') location.href = 'display.html';
+    else location.href = 'student.html';
+  } catch (err) {
+    P112.msg('loginMsg', '登入成功，但找不到 p112_profiles 對應資料。請管理員建立 profile。');
+  }
+});
+</script>
+</body>
+</html>

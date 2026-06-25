@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>現場碼看板｜P112</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/common.js"></script>
+</head>
+<body class="display-body">
+  <div class="display-panel" id="displayPanel">
+    <div class="display-title">P112 我來值班｜實驗室現場碼</div>
+    <div id="loginBox">
+      <p class="small">請以 display 專用帳號登入。此裝置也必須已由管理員註冊 device token。</p>
+      <div id="displayMsg" class="notice hidden"></div>
+      <label>Email</label><input id="email" type="email">
+      <label>Password</label><input id="password" type="password">
+      <p><button class="primary" onclick="displayLogin()">登入看板</button></p>
+    </div>
+    <div id="codeBox" class="hidden">
+      <div class="display-code" id="labCode">------</div>
+      <div class="display-meta">
+        <div><strong>裝置</strong><br><span id="deviceName">-</span></div>
+        <div><strong>有效時間</strong><br><span id="validRange">-</span></div>
+        <div><strong>更新倒數</strong><br><span id="countdown">-</span></div>
+      </div>
+      <p class="small" id="clock">-</p>
+    </div>
+  </div>
+<script src="js/display.js"></script>
+</body></html>
