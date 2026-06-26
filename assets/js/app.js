@@ -46,9 +46,9 @@
       const me=await currentUser(); $('meBox').textContent=`${me.display_name}｜${me.email}｜${me.system_role}`;
       $('slotFrom').value=todayPlus(0); $('slotTo').value=todayPlus(14);
       await loadUnits('unitSelect'); updatePhotoNotice();
-      $('unitSelect').onchange=async()=>{updatePhotoNotice(); await loadWorkItems(); await loadHours();};
-      $('loadSlotsBtn').onclick=loadSlots; $('loadMyReservationsBtn').onclick=loadMyReservations; $('checkoutSubmitBtn').onclick=submitCheckout;
-      await loadWorkItems(); await loadHours(); await loadMyReservations();
+      $('unitSelect').onchange=async()=>{updatePhotoNotice(); await loadWorkItems(); await loadHours(); await loadSlots(); await loadMyReservations();};
+      $('loadSlotsBtn').onclick=loadSlots; $('adHocCheckinBtn').onclick=adHocCheckin; $('loadMyReservationsBtn').onclick=loadMyReservations; $('checkoutSubmitBtn').onclick=submitCheckout;
+      await loadWorkItems(); await loadHours(); await loadSlots(); await loadMyReservations();
     }catch(e){ $('authBox').textContent='登入狀態無效：'+e.message; $('authBox').classList.remove('hidden'); }
   }
   function updatePhotoNotice(){
@@ -63,7 +63,7 @@
       const data=await rpc('p112_get_slots',{p_token:token(),p_unit_id:unit,p_from:$('slotFrom').value,p_to:$('slotTo').value});
       for(const s of data){
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${s.slot_date}</td><td>${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}</td><td>${s.regular_user||'<span class="muted">空</span>'}<br><span class="muted">${s.regular_count||0}/${s.regular_capacity||0}</span></td><td>${s.standby_user||'<span class="muted">空</span>'}<br><span class="muted">${s.standby_count||0}/${s.standby_capacity||0}</span></td><td></td>`;
+        tr.innerHTML=`<td>${s.unit_name||''}</td><td>${s.slot_date}</td><td>${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}</td><td>${s.regular_user||'<span class="muted">空</span>'}<br><span class="muted">${s.regular_count||0}/${s.regular_capacity||0}</span></td><td>${s.standby_user||'<span class="muted">空</span>'}<br><span class="muted">${s.standby_count||0}/${s.standby_capacity||0}</span></td><td></td>`;
         const td=tr.lastChild;
         const b1=document.createElement('button'); b1.textContent='預約正式'; b1.disabled=(Number(s.regular_count||0) >= Number(s.regular_capacity||0)); b1.onclick=()=>reserve(s.slot_id,'regular');
         const b2=document.createElement('button'); b2.textContent='預約待命'; b2.className='secondary'; b2.disabled=(Number(s.standby_count||0) >= Number(s.standby_capacity||0)); b2.onclick=()=>reserve(s.slot_id,'standby');
@@ -88,7 +88,14 @@
     }catch(e){ alert(e.message); }
   }
   async function checkin(resId){
-    try{ await rpc('p112_checkin',{p_token:token(),p_reservation_id:resId,p_user_agent:navigator.userAgent,p_ip:null}); alert('簽到完成。請依單位規定另寄照片 email 作為人工佐證。'); await loadMyReservations(); }
+    try{ await rpc('p112_checkin',{p_token:token(),p_reservation_id:resId,p_user_agent:navigator.userAgent,p_ip:null}); alert('簽到完成。請依單位規定另寄照片 email 作為人工佐證。'); await loadMyReservations(); await loadSlots(); }
+    catch(e){ alert(e.message); }
+  }
+  async function adHocCheckin(){
+    const unit=$('unitSelect')?.value;
+    if(!unit){ alert('請先選擇單位。'); return; }
+    if(!confirm('確定要使用「未預約臨時簽到」？系統會建立目前半小時時段的臨時出勤紀錄，並標記給管理者確認。')) return;
+    try{ await rpc('p112_ad_hoc_checkin',{p_token:token(),p_unit_id:unit,p_user_agent:navigator.userAgent,p_ip:null}); alert('臨時簽到完成。請依單位規定另寄照片 email 作為人工佐證。'); await loadSlots(); await loadMyReservations(); }
     catch(e){ alert(e.message); }
   }
   async function loadWorkItems(){
@@ -99,7 +106,7 @@
   }
   async function submitCheckout(){
     const ids=[...document.querySelectorAll('.workItemChk:checked')].map(x=>x.value);
-    try{ const data=await rpc('p112_checkout',{p_token:token(),p_reservation_id:$('checkoutReservationId').value,p_work_summary:$('workSummary').value,p_abnormal_note:$('abnormalNote').value,p_work_item_ids:ids,p_user_agent:navigator.userAgent,p_ip:null}); $('studentMsg').textContent=`簽退完成，計入 ${data.hours_delta} 小時。`; await loadMyReservations(); await loadHours(); }
+    try{ const data=await rpc('p112_checkout',{p_token:token(),p_reservation_id:$('checkoutReservationId').value,p_work_summary:$('workSummary').value,p_abnormal_note:$('abnormalNote').value,p_work_item_ids:ids,p_user_agent:navigator.userAgent,p_ip:null}); $('studentMsg').textContent=`簽退完成，計入 ${data.hours_delta} 小時。`; await loadMyReservations(); await loadHours(); await loadSlots(); }
     catch(e){ $('studentMsg').textContent='簽退失敗：'+e.message; }
   }
   async function loadHours(){

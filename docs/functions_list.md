@@ -47,3 +47,9 @@
 - `p112_create_duty_slot(token, unit_id, slot_date, start_time, end_time, note, regular_capacity, standby_capacity)`：建立或更新工作／值班時段，並設定正式出勤名額與待命名額。
 - `p112_get_slots(token, unit_id, from, to)`：回傳時段清單，包含 `regular_count`、`standby_count`、`regular_capacity`、`standby_capacity`。
 - `p112_create_reservation(token, slot_id, reservation_type)`：建立預約前會檢查該類型容量是否已滿。
+
+
+## V1.1 新增 / 修正
+
+- `p112_get_slots(p_token, p_unit_id, p_from, p_to)`：回傳欄位新增 `unit_id`、`unit_name`，前端也顯示單位名稱。
+- `p112_ad_hoc_checkin(p_token, p_unit_id, p_user_agent, p_ip)`：未預約臨時簽到，會建立當下半小時臨時時段、reservation、attendance log，並新增異常旗標。

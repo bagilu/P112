@@ -121,3 +121,17 @@ sql/p112_schema.sql
 本版會重建資料表與 functions。重建後，請再次執行 bootstrap sysadmin SQL。
 
 建立時段時，管理端可以設定「正式名額」與「待命名額」。若正式名額為 2，同一時段即可有兩位正式出勤者各自打卡。
+
+
+## 既有 MultiCapacity 版升級到 V1.1
+
+如果您已經成功安裝前一版，而且不想清掉資料，請不要重新執行完整 `p112_schema.sql`。請改執行：
+
+```sql
+-- Supabase SQL Editor
+-- 貼上 sql/p112_migration_ad_hoc_unitfix.sql 的內容後執行
+```
+
+然後重新上傳新版網站檔案，並用 `Ctrl + F5` 或網址加 `?v=adhoc-unitfix` 清除瀏覽器快取。
+
+若是全新安裝或測試資料可清除，則可直接執行新版 `sql/p112_schema.sql`。
