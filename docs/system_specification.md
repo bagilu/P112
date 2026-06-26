@@ -1,81 +1,55 @@
-# P112 LabDuty Multi-Unit V1 系統規格書
+# P112 系統規格書
 
-## 1. 系統名稱
+## 系統名稱
 
-中文：P112 我來值班  
-英文：P112 LabDuty  
-副標題：多單位值班排程、簽到簽退、工作紀錄與時數管理系統
+P112 我來值班 / P112 LabDuty
 
-## 2. 系統目的
+## 系統目的
 
-本系統用於管理實驗室、辦公室、中心、公司部門或專案團隊之值班與工作紀錄。第一版重點是降低部署與使用門檻，因此不在系統內蒐集照片，而是透過 email 照片人工佐證方式處理到場證明。
+建立一套多單位值班管理系統，使實驗室、部門、公司、中心或專案團隊能夠管理工作時段、正式值班、待命預約、簽到簽退、工作項目、異常回報與時數統計。
 
-## 3. 技術架構
+## V1 範圍
 
-- Frontend：HTML / CSS / JavaScript
-- Hosting：GitHub Pages
-- Backend：Supabase Auth + PostgreSQL + SQL RPC
-- Deployment：Supabase Dashboard 手動貼 SQL，不使用 CLI
+### 包含
 
-## 4. 功能需求
+- 自建帳號密碼登入
+- sysadmin / user 系統角色
+- unit_admin / supervisor / worker 單位角色
+- 多單位管理
+- 同一使用者加入多個單位
+- 半小時或自訂時段排班
+- 正式值班與待命預約
+- 簽到與簽退
+- 工作項目清單
+- 工作摘要與異常回報
+- 時數交易紀錄
+- 累積時數摘要
+- email 照片人工佐證提醒
 
-### 4.1 多單位管理
+### 不包含
 
-系統管理員可建立多個單位。每個單位有獨立設定、成員、排班、工作項目與報表。
+- Supabase Authentication
+- Supabase email reset password
+- Gmail API
+- 系統內照片上傳
+- GPS
+- 現場動態碼實際啟用
+- 裝置 token 實際啟用
 
-### 4.2 成員管理
+## 帳號安全
 
-同一使用者可加入多個單位。角色包含 unit_admin、supervisor、worker。
+密碼不得以明文儲存。系統使用 PostgreSQL `pgcrypto` 產生 `password_hash`。登入成功後產生隨機 session token，前端儲存在 localStorage。
 
-### 4.3 排班
+## 權限模型
 
-單位管理員可依日期、起迄時間與時段長度建立 duty slots。預設半小時。
+所有資料表啟用 RLS，不提供前端直接 select/insert/update/delete。前端只呼叫 `p112_` RPC functions，由 function 檢查 session token、系統角色與單位角色。
 
-### 4.4 預約
+## 照片佐證策略
 
-worker 可預約正式值班或待命。第一版允許每時段一位正式值班者與一位待命者。
+V1 不在系統內儲存照片。若單位設定 `photo_email`，學生簽到後由系統提醒寄送照片 email 給管理者。照片保存責任不在 P112 資料庫內。
 
-### 4.5 簽到簽退
+## 命名規則
 
-使用者可針對自己的預約簽到與簽退。系統記錄時間、user agent、工作摘要與異常回報。
-
-### 4.6 工作項目
-
-單位管理員可建立工作分類與工作項目。簽退時使用者需依單位設定勾選工作項目。
-
-### 4.7 時數
-
-系統以 `p112_hour_transactions` 作為時數帳本。簽退完成後產生 attendance transaction。
-
-### 4.8 報表
-
-管理端可查看出勤報表與累積時數報表，並可匯出 CSV。
-
-## 5. 非功能需求
-
-- 所有資料表與 function 使用 `p112_` 前綴。
-- 系統不覆蓋既有 `config.js`，只提供 `config.sample.js`。
-- 第一版不使用 Edge Function 部署。
-- 第一版不使用照片上傳。
-- 第一版不使用 Gmail API。
-- 第一版保留 V2 現場碼架構但不啟用。
-
-## 6. 安全與隱私
-
-- 使用 Supabase Auth 進行登入。
-- 使用 Row Level Security 控管資料存取。
-- 使用者只能查看自己的出勤資料。
-- 單位管理者只能查看自己管理單位的資料。
-- 系統管理員可建立與管理單位。
-- 照片不進入系統資料庫或 storage。
-
-## 7. V2 擴充方向
-
-- display 專用帳號
-- 授權裝置 token
-- 實驗室現場動態碼
-- 自動缺席標記
-- 待命補位自動判定
-- Gmail/Drive 整合
-- 管理審核流程
-
+- Tables: `TblP112...`
+- Functions: `p112_...`
+- CSS/JS 檔案：一般靜態檔命名

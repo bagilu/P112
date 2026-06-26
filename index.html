@@ -1,16 +1,10 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>P112 我來值班｜LabDuty</title><link rel="stylesheet" href="assets/css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="assets/js/app.js"></script></head><body>
-<header class="topbar"><div class="brand">P112 我來值班 <small>Multi-Unit Duty Scheduling, Check-in, Work Logging, and Hour Tracking</small></div><nav class="nav"><a href="student.html">學生端</a><a href="admin.html">管理端</a><a href="display.html">現場碼 V2 預留</a></nav></header>
-<section class="hero"><span class="badge">V1｜多單位架構・Email 照片佐證・保留現場碼升級路徑</span><h1>把值班從「有沒有來」管理到<br><span class="gold">「在哪個單位、做了什麼、累積多少」</span></h1><p>P112 是一套可部署於 GitHub Pages、搭配 Supabase 的多單位值班管理系統。第一版不儲存照片、不啟用現場碼 token；學生完成系統簽到簽退後，依單位規則另寄照片給老師或主管作為人工佐證。</p></section>
-<main class="wrap"><div class="grid">
-<div class="card span-4"><h3>學生端</h3><p class="muted">預約正式值班或待命時段、簽到簽退、勾選工作項目、填寫摘要與異常回報、查看個人時數。</p><a class="btn" href="student.html">進入學生端</a></div>
-<div class="card span-4"><h3>管理端</h3><p class="muted">系統管理員建立單位；單位管理員管理成員、排班、工作清單、出勤紀錄、時數與 CSV 匯出。</p><a class="btn" href="admin.html">進入管理端</a></div>
-<div class="card span-4"><h3>V2 預留</h3><p class="muted">display 專用帳號、授權裝置 token、現場動態碼架構已在資料庫預留，第一版預設停用。</p><a class="btn secondary" href="display.html">查看看板佔位頁</a></div>
-<div class="card span-12"><h2>登入</h2><div id="msg" class="hidden"></div><div class="row"><div><label>Email</label><input id="email" type="email" placeholder="student@example.edu.tw"></div><div><label>密碼</label><input id="password" type="password" placeholder="Password"></div></div><div class="btnbar"><button class="btn" onclick="login()">登入</button><button class="btn secondary" onclick="p112SignOut()">登出</button></div><p class="small muted">第一版不啟用 Email 忘記密碼；若忘記密碼，請由管理員在 Supabase Auth 後台重設。</p></div>
-</div></main><footer class="footer">P112 LabDuty｜American policy institute style interface｜GitHub Pages + Supabase</footer>
-<script>
-let client; try{client=p112Init();}catch(e){p112Msg($('msg'),e.message,'error')}
-async function login(){
-  try{const {error}=await client.auth.signInWithPassword({email:$('email').value,password:$('password').value}); if(error) throw error; p112Msg($('msg'),'登入成功。請選擇學生端或管理端。','ok');}
-  catch(e){p112Msg($('msg'),e.message,'error')}
-}
-</script></body></html>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>P112 我來值班</title><link rel="stylesheet" href="assets/css/style.css"></head><body data-page="login">
+<header><h1>P112 我來值班</h1><p>Multi-Unit Duty Scheduling, Check-in, Work Logging, and Hour Tracking System</p></header>
+<nav class="nav"><a href="index.html">登入</a><a href="student.html">學生端</a><a href="admin.html">管理端</a><a href="display.html">V2 看板預留</a></nav>
+<main class="wrap">
+  <section class="hero">
+    <div class="card"><h2 class="hero-title">多單位值班、簽到與工作紀錄平台</h2><p class="muted">本版不使用 Supabase Authentication，改採 <strong>TblP112Users</strong> 與 <strong>TblP112Sessions</strong> 自建登入機制。照片不進資料庫，僅提示學生另寄 email 給管理者作為人工佐證。</p><div class="notice warn">第一次使用前，請先在 SQL Editor 執行 <code>sql/p112_schema.sql</code>，再執行 <code>p112_bootstrap_sysadmin()</code> 建立第一位 sysadmin。</div></div>
+    <div class="card login-box"><h2>登入</h2><label>Email</label><input id="loginEmail" type="email" placeholder="teacher@example.com"><label>Password</label><input id="loginPassword" type="password"><button id="loginBtn">登入</button><p id="loginMsg" class="muted"></p><hr><p class="small muted">本系統不使用 email reset。忘記密碼時，請由 sysadmin 在管理端重設。</p></div>
+  </section>
+</main><footer class="footer">P112 LabDuty｜American professional think-tank style UI</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="assets/js/app.js"></script></body></html>
