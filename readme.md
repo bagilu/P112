@@ -1,187 +1,195 @@
 # P112 我來值班 / P112 LabDuty
 
-**副標題：** 實驗室值班預約、現場簽到、工作紀錄與時數管理系統  
-**Architecture:** GitHub Pages static website + Supabase Auth + Supabase PostgreSQL/RPC
+**版本：Multi-Unit V1**  
+**定位：多單位值班排程、簽到簽退、工作紀錄與時數管理系統**
 
-本專案是 P112 第一版 MVP。設計目標是讓實驗室輪值學生可以預約值班或待命，到現場後以「現場動態碼」簽到，離開時簽退並登錄工作項目與摘要。管理者可查看所有預約、出勤、工作內容、異常與時數。
-
----
-
-## 1. 設計風格
-
-本版採用「**美式專業智庫風**」：
-
-- 深藍、灰白、金色點綴。
-- 重視資訊層次、制度感與可信度。
-- 避免過度裝飾，適合實驗室管理、研究團隊與正式場合。
+本系統以 GitHub Pages 作為靜態網站，Supabase 作為資料庫與登入驗證。第一版採用「系統簽到簽退 + email 照片人工佐證」作為現場到場記錄方式，不在系統內儲存照片，也不啟用現場動態碼與授權裝置 token。現場碼相關資料表與函式保留為第二版升級路徑。
 
 ---
 
-## 2. 第一版功能範圍
+## 1. 核心設計
 
-### 2.1 學生端
+P112 V1 的核心不是單一實驗室，而是「多單位」架構。系統可以建立多個單位，例如：
 
-- Email / Password 登入。
-- 查看可預約時段。
-- 預約正式值班。
-- 預約待命。
-- 輸入實驗室現場動態碼簽到。
-- 輸入實驗室現場動態碼簽退。
-- 簽退時勾選工作項目。
-- 填寫工作摘要。
-- 填寫異常回報。
-- 查看個人累積時數。
-- 查看個人預約與出勤紀錄。
+- 智慧商情研究室
+- 好玩實驗室
+- 系辦公室
+- 某中心
+- 某公司部門
+- 某專案團隊
 
-### 2.2 管理端
-
-- 建立 / 更新 `p112_profiles`。
-- 批次建立半小時值班時段。
-- 管理工作分類與工作項目。
-- 查看所有出勤與工作紀錄。
-- 查看學生累積時數。
-- 匯出時數 CSV。
-- 匯出出勤 CSV。
-- 註冊本機為現場碼看板裝置。
-
-### 2.3 現場碼看板端
-
-採用：
-
-> display 專用帳號 + 授權裝置 token + 現場動態碼
-
-看板端只顯示：
-
-- 六位數現場碼。
-- 有效時間。
-- 下一次更新倒數。
-- 授權裝置名稱。
-
-看板端不顯示學生個資，不提供管理功能。
+同一位使用者可以同時加入多個單位，並在不同單位有不同角色、排班、出勤紀錄與時數統計。
 
 ---
 
-## 3. 第一版刻意不做的功能
+## 2. 角色設計
 
-- 不上傳照片。
-- 不使用 GPS。
-- 不依賴固定 IP。
-- 不提供 Email 忘記密碼。
-- 不處理 Line / Email / SMS 通知送達證明。
-- 不自動倒扣時數。
-- 不讓工作項目直接換算時數。
+### 2.1 系統層級角色
+
+| 角色 | 說明 |
+|---|---|
+| `system_admin` | 可建立單位、管理全系統基礎設定 |
+| `user` | 一般使用者 |
+
+### 2.2 單位層級角色
+
+| 角色 | 說明 |
+|---|---|
+| `unit_admin` | 管理該單位成員、時段、設定、工作項目、報表 |
+| `supervisor` | 可查看該單位紀錄與報表 |
+| `worker` | 可預約、簽到、簽退、填寫工作紀錄 |
 
 ---
 
-## 4. 檔案結構
+## 3. 第一版功能範圍
+
+### 3.1 學生端 / 工作者端
+
+- 登入
+- 選擇所屬單位
+- 查看可預約時段
+- 預約正式值班
+- 預約待命
+- 查看自己的預約
+- 系統簽到
+- 系統簽退
+- 勾選工作項目
+- 填寫工作摘要
+- 填寫異常回報
+- 查看自己的累積時數
+- 若單位要求照片，依提示另外 email 給老師或主管
+
+### 3.2 管理端
+
+- 建立單位
+- 選擇管理單位
+- 新增單位成員
+- 設定照片寄送信箱
+- 設定是否要求 email 照片佐證
+- 設定是否啟用待命
+- 產生半小時或其他長度的排班時段
+- 建立工作分類
+- 建立工作項目與完成標準
+- 查看出勤與工作紀錄
+- 查看學生累積時數
+- 匯出 CSV
+
+### 3.3 保留但預設停用
+
+- `display` 現場碼看板
+- 授權裝置 token
+- 現場動態碼
+- lab device audit
+
+---
+
+## 4. 第一版刻意不做的功能
+
+| 功能 | V1 狀態 | 原因 |
+|---|---|---|
+| 系統內照片上傳 | 不做 | 避免隱私、儲存空間與刪除管理問題 |
+| 現場動態碼 | 保留但停用 | 第一版降低部署難度 |
+| 授權裝置 token | 保留但停用 | 第二版再啟用 |
+| Gmail 自動驗證照片 | 不做 | 涉及 Gmail API、權限與自動化複雜度 |
+| Email 忘記密碼 | 不做 | 密碼重設由管理員在 Supabase Auth 後台處理 |
+| GPS | 不做 | 隱私與準確性問題 |
+| 固定 IP 限制 | 不做 | 動態 IP 不可靠 |
+| 自動通知待命者 | 不做 | 通知送達與責任歸屬複雜 |
+
+---
+
+## 5. 主要資料表
+
+| 資料表 | 用途 |
+|---|---|
+| `p112_profiles` | 使用者基本資料與系統角色 |
+| `p112_units` | 單位資料，例如實驗室、部門、公司 |
+| `p112_unit_members` | 使用者與單位的多對多關係 |
+| `p112_unit_settings` | 每個單位的打卡、待命、照片 email 設定 |
+| `p112_duty_slots` | 半小時或自訂長度的值班時段 |
+| `p112_reservations` | 正式值班與待命預約 |
+| `p112_attendance_logs` | 簽到、簽退、工作摘要與異常回報 |
+| `p112_work_categories` | 工作分類 |
+| `p112_work_items` | 工作項目與完成標準 |
+| `p112_attendance_work_items` | 每次簽退完成的工作項目 |
+| `p112_hour_transactions` | 時數加減帳本 |
+| `p112_lab_devices` | V2 授權看板裝置預留 |
+| `p112_lab_code_audit` | V2 現場碼事件稽核預留 |
+
+---
+
+## 6. 主要 SQL RPC / Function
+
+| Function | 用途 |
+|---|---|
+| `p112_get_my_units()` | 取得登入者可使用的單位 |
+| `p112_create_unit()` | system_admin 建立新單位 |
+| `p112_add_unit_member_by_email()` | 將已存在 profile 的使用者加入單位 |
+| `p112_generate_slots()` | 依日期、起迄時間、時段長度產生值班時段 |
+| `p112_make_reservation()` | 預約正式值班或待命 |
+| `p112_get_my_reservations()` | 取得自己的預約 |
+| `p112_checkin()` | 簽到 |
+| `p112_checkout()` | 簽退並建立時數紀錄 |
+| `p112_get_my_hours()` | 查看自己的累積時數 |
+| `p112_admin_attendance_report()` | 管理端出勤報表 |
+| `p112_admin_hours_report()` | 管理端時數報表 |
+| `p112_get_display_code()` | V2 現場碼預留 |
+
+---
+
+## 7. Email 照片佐證規則
+
+第一版不在系統內收照片。若單位啟用 `require_photo_email`，學生簽到後應依系統提示，以 email 傳送照片給單位設定的 `photo_email`。
+
+建議 email 主旨格式：
 
 ```text
-P112_LabDuty_MVP/
-├── index.html
-├── student.html
-├── admin.html
-├── display.html
-├── css/
-│   └── styles.css
-├── js/
-│   ├── config.sample.js
-│   ├── supabaseClient.js
-│   ├── common.js
-│   ├── student.js
-│   ├── admin.js
-│   └── display.js
-├── sql/
-│   └── p112_schema.sql
-├── docs/
-│   └── deployment_steps.md
-└── supabase_functions/
-    └── p112_lab_code/
-        └── index.ts
+P112簽到照片｜單位名稱｜姓名｜日期時間
+```
+
+照片保存責任由收件信箱管理者負責。系統僅保存簽到簽退、工作紀錄與時數資料。
+
+---
+
+## 8. 部署架構
+
+```text
+GitHub Pages
+  index.html
+  student.html
+  admin.html
+  display.html  # V2 預留
+  assets/css/style.css
+  assets/js/app.js
+  config.js     # 由 config.sample.js 複製，不納入公開版
+
+Supabase
+  Auth
+  PostgreSQL tables
+  SQL RPC functions
+  Row Level Security policies
 ```
 
 ---
 
-## 5. Supabase 資料表
+## 9. 風格設定
 
-所有資料表皆以 `p112_` 開頭。
+本版採用「美式專業智庫風」：
 
-| 資料表 | 用途 |
+- 深藍主色
+- 白色卡片
+- 金色重點
+- 清楚表格
+- 報告式排版
+- 低裝飾、高可讀性
+
+---
+
+## 10. 版本路線
+
+| 版本 | 核心 |
 |---|---|
-| `p112_profiles` | 使用者 profile、角色、狀態。 |
-| `p112_settings` | 系統設定，目前含現場碼 secret。 |
-| `p112_duty_slots` | 半小時值班時段。 |
-| `p112_reservations` | 正式值班與待命預約。 |
-| `p112_attendance_logs` | 簽到、簽退、現場碼驗證、摘要、異常。 |
-| `p112_work_categories` | 工作分類。 |
-| `p112_work_items` | 工作項目與完成標準。 |
-| `p112_attendance_work_items` | 某次出勤完成哪些工作項目。 |
-| `p112_hour_transactions` | 時數交易紀錄。 |
-| `p112_lab_devices` | 授權現場碼看板裝置。 |
+| V1 | 多單位、排班、簽到簽退、工作紀錄、時數、email 照片提醒 |
+| V2 | 現場動態碼、display 專用帳號、授權裝置 token |
+| V3 | Gmail/Drive 整合、自動通知、審核流程、進階統計 |
 
----
-
-## 6. Supabase Function / RPC
-
-所有 function 皆以 `p112_` 開頭。
-
-| Function | 用途 |
-|---|---|
-| `p112_touch_updated_at()` | 自動更新 `updated_at`。 |
-| `p112_current_role()` | 取得目前登入者角色。 |
-| `p112_is_admin()` | 判斷目前登入者是否為 admin。 |
-| `p112_lab_code_bucket()` | 將時間切成 5 分鐘區段。 |
-| `p112_generate_lab_code()` | 根據 secret 與時間區段產生六位數現場碼。 |
-| `p112_verify_lab_code()` | 驗證學生輸入的現場碼。 |
-| `p112_get_display_code()` | 驗證看板裝置 token 並回傳目前現場碼。 |
-| `p112_create_slots()` | 批次建立半小時時段。 |
-
-本版主要使用 Supabase SQL RPC，不需要 CLI / npx deploy。
-
----
-
-## 7. 角色設計
-
-| 角色 | 說明 |
-|---|---|
-| `student` | 學生，可預約、簽到、簽退、看自己的紀錄。 |
-| `admin` | 管理者，可管理 profile、時段、工作項目、出勤、時數與看板裝置。 |
-| `display` | 看板帳號，只用於登入 display.html。真正能否顯示現場碼仍需本機 device token。 |
-
----
-
-## 8. 現場動態碼安全設計
-
-現場碼不是寫在前端 JavaScript 裡，而是由 Supabase SQL RPC 產生。
-
-流程：
-
-1. 管理者在實驗室看板機上登入 admin。
-2. 到管理端「看板裝置」頁註冊本機。
-3. 系統產生隨機 token，將 token 存在該瀏覽器 localStorage。
-4. 資料庫只存 token 的 SHA-256 hash。
-5. 看板機用 display 帳號登入 display.html。
-6. `display.html` 呼叫 `p112_get_display_code(device_id, token)`。
-7. Supabase 驗證 token 後回傳現場碼。
-
----
-
-## 9. 目前限制
-
-這是 MVP，不是完整商用系統。
-
-- 學生仍可能透過共謀方式取得現場碼；本系統目標是提高宿舍打卡成本，而不是達到監控等級防弊。
-- 第一版出勤時數由簽到與簽退時間差自動計算；待命 10% 與補位規則可在第二版進一步自動化。
-- 管理員建立 Auth 使用者與重設密碼仍需到 Supabase Dashboard 操作。
-- 若重新部署新版，請不要覆蓋自己的 `js/config.js`。
-
----
-
-## 10. 建議第二版功能
-
-- 待命 10% 自動計入。
-- 正式值班缺席後待命者補位自動判斷。
-- 缺席統計與警示。
-- 管理員人工時數調整介面。
-- 每週 / 每月報表。
-- 看板機心跳異常提醒。
-- 工作項目完成頻率統計。

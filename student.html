@@ -1,30 +1,54 @@
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>學生端｜P112 我來值班</title>
-  <link rel="stylesheet" href="css/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js"></script>
-  <script src="js/supabaseClient.js"></script>
-  <script src="js/common.js"></script>
-</head>
-<body>
-<header class="hero"><div class="container"><nav class="nav"><div class="brand"><div class="brand-mark">P112</div><div>學生端<br><span class="small" id="whoami">Loading...</span></div></div><div class="nav-links"><a href="index.html">首頁</a><button onclick="P112.signOut()">登出</button></div></nav><h1>預約、簽到、簽退。</h1><p class="lead">請到實驗室現場後輸入看板上的六位數動態碼。簽退時需勾選工作項目並填寫摘要。</p></div></header>
-<main class="main"><div class="container grid">
-  <div id="msg" class="notice hidden"></div>
-  <section class="grid three">
-    <div class="card"><h3>累積時數</h3><div class="kpi" id="totalHours">0.00</div><div class="small">依 p112_hour_transactions 加總。</div></div>
-    <div class="card"><h3>目前狀態</h3><div class="kpi" id="activeStatus">-</div><div class="small">若已簽到未簽退，請完成簽退。</div></div>
-    <div class="card"><h3>待辦提醒</h3><div id="reminder" class="small">讀取中...</div></div>
-  </section>
-  <section class="card"><div class="section-title"><h2>可預約時段</h2><button onclick="loadAll()">重新整理</button></div><div class="form-row"><div><label>起始日期</label><input id="fromDate" type="date"></div><div><label>結束日期</label><input id="toDate" type="date"></div></div><p><button class="primary" onclick="loadSlots()">查詢時段</button></p><div class="table-wrap"><table><thead><tr><th>時段</th><th>狀態</th><th>正式值班</th><th>待命</th><th>操作</th></tr></thead><tbody id="slotsBody"></tbody></table></div></section>
-  <section class="grid two">
-    <div class="card"><h2>簽到</h2><p class="small">請選擇您已預約且尚未完成的時段，輸入現場碼簽到。</p><label>預約紀錄</label><select id="checkinReservation"></select><label>現場碼</label><input id="checkinCode" inputmode="numeric" maxlength="6" placeholder="例如 123456"><p><button class="accent" onclick="checkIn()">送出簽到</button></p></div>
-    <div class="card"><h2>簽退</h2><p class="small">簽退會建立工作紀錄與時數交易。至少勾選一項工作，並填寫摘要。</p><label>現場碼</label><input id="checkoutCode" inputmode="numeric" maxlength="6" placeholder="例如 123456"><label>工作項目</label><div id="workItemsBox" class="small"></div><label>工作摘要</label><textarea id="workSummary" placeholder="請簡要說明本次完成內容"></textarea><label>異常回報</label><textarea id="issueReport" placeholder="沒有異常可填：無"></textarea><p><button class="primary" onclick="checkOut()">送出簽退</button></p></div>
-  </section>
-  <section class="card"><div class="section-title"><h2>我的預約與出勤</h2></div><div class="table-wrap"><table><thead><tr><th>時段</th><th>類型</th><th>預約狀態</th><th>簽到</th><th>簽退</th><th>摘要</th></tr></thead><tbody id="myLogsBody"></tbody></table></div></section>
-</div></main>
-<script src="js/student.js"></script>
-</body></html>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>P112 學生端</title><link rel="stylesheet" href="assets/css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="assets/js/app.js"></script></head><body>
+<header class="topbar"><div class="brand">P112 學生端 <small>預約・簽到・簽退・工作紀錄</small></div><nav class="nav"><a href="index.html">首頁</a><a href="admin.html">管理端</a><button onclick="p112SignOut()">登出</button></nav></header>
+<main class="wrap"><div id="msg" class="hidden"></div><div class="grid">
+<section class="card span-12"><h2>選擇單位</h2><p class="muted">若您屬於多個單位，請先選擇本次要值班的單位。</p><div class="row"><select id="unitSelect"></select><button class="btn" onclick="selectUnit()">使用此單位</button></div><p id="currentUnit" class="notice hidden"></p></section>
+<section class="card span-8"><h2>可預約時段</h2><div class="row"><div><label>日期</label><input id="slotDate" type="date"></div><button class="btn secondary" onclick="loadSlots()">查詢</button></div><div id="slotsBox"></div></section>
+<section class="card span-4"><h2>我的累積時數</h2><div class="kpi" id="myHours">0.00</div><div class="kpi-label">hours</div><button class="btn secondary" onclick="loadMyHours()">重新整理</button></section>
+<section class="card span-12"><h2>我的預約與簽到</h2><button class="btn secondary" onclick="loadMyReservations()">重新整理</button><div id="myReservations"></div></section>
+<section class="card span-12"><h2>簽退工作紀錄</h2><p class="muted">簽退時請勾選工作項目、填寫摘要與異常回報。若該單位要求照片，系統會提示 email 主旨與收件信箱，但不會儲存照片。</p><div class="row"><div><label>預約紀錄 ID</label><input id="checkoutReservationId" placeholder="從上方我的預約複製"></div><button class="btn secondary" onclick="loadWorkItems()">載入工作項目</button></div><div id="workItemsBox" class="checklist"></div><label>工作摘要</label><textarea id="workSummary" placeholder="例如：完成桌面整理、檢查展示螢幕，並回報 P104 頁面需重新整理。"></textarea><label>異常回報</label><textarea id="issueReport" placeholder="無，或填寫設備、環境、系統異常。"></textarea><button class="btn" onclick="checkout()">簽退並送出工作紀錄</button></section>
+</div></main><footer class="footer">P112 LabDuty</footer>
+<script>
+let client; try{client=p112Init();}catch(e){p112Msg($('msg'),e.message,'error')}
+$('slotDate').value=p112Today();
+async function init(){ const user=await p112User(); if(!user){ location.href='index.html'; return; } await loadUnits(); }
+async function loadUnits(){
+  try{const units=await p112ListMyUnits(); $('unitSelect').innerHTML=units.map(u=>`<option value="${u.unit_id}">${u.unit_name}｜${u.role_in_unit}</option>`).join(''); if(units.length){p112SetUnit(units[0].unit_id,units[0].unit_name); showUnit(); loadSlots(); loadMyHours(); loadMyReservations();}}
+  catch(e){p112Msg($('msg'),e.message,'error')}
+}
+function selectUnit(){ const opt=$('unitSelect').selectedOptions[0]; if(!opt) return; p112SetUnit(opt.value,opt.textContent.split('｜')[0]); showUnit(); loadSlots(); loadMyHours(); loadMyReservations(); }
+function showUnit(){ const u=p112GetUnit(); $('currentUnit').textContent='目前單位：'+(u.unit_name||u.unit_id); $('currentUnit').classList.remove('hidden'); }
+async function loadSlots(){
+  const u=p112GetUnit(); if(!u.unit_id) return;
+  const {data,error}=await client.from('p112_duty_slots').select('slot_id,slot_date,start_time,end_time,status').eq('unit_id',u.unit_id).eq('slot_date',$('slotDate').value).order('start_time');
+  if(error){p112Msg($('msg'),error.message,'error');return}
+  $('slotsBox').innerHTML=`<table><tr><th>時段</th><th>狀態</th><th>操作</th></tr>${(data||[]).map(s=>`<tr><td>${s.start_time.slice(0,5)}–${s.end_time.slice(0,5)}<br><span class="small mono">${s.slot_id}</span></td><td>${s.status}</td><td><button class="btn secondary" onclick="reserve('${s.slot_id}','regular')">正式值班</button> <button class="btn ghost" onclick="reserve('${s.slot_id}','standby')">待命</button></td></tr>`).join('')}</table>`;
+}
+async function reserve(slotId,type){
+  const u=p112GetUnit(); const {error}=await client.rpc('p112_make_reservation',{p_unit_id:u.unit_id,p_slot_id:slotId,p_reservation_type:type});
+  if(error){p112Msg($('msg'),error.message,'error')}else{p112Msg($('msg'),'預約完成。','ok'); loadSlots(); loadMyReservations();}
+}
+async function loadMyReservations(){
+  const u=p112GetUnit(); if(!u.unit_id) return;
+  const {data,error}=await client.rpc('p112_get_my_reservations',{p_unit_id:u.unit_id}); if(error){p112Msg($('msg'),error.message,'error');return}
+  $('myReservations').innerHTML=`<table><tr><th>ID</th><th>日期時段</th><th>類型</th><th>狀態</th><th>操作</th></tr>${(data||[]).map(r=>`<tr><td><span class="small mono">${r.reservation_id}</span></td><td>${r.slot_date} ${r.start_time.slice(0,5)}–${r.end_time.slice(0,5)}</td><td>${r.reservation_type}</td><td>${p112StatusLabel(r.status)}</td><td><button class="btn secondary" onclick="checkin('${r.reservation_id}')">簽到</button> <button class="btn ghost" onclick="prepareCheckout('${r.reservation_id}')">準備簽退</button></td></tr>`).join('')}</table>`;
+}
+async function checkin(reservationId){
+  const {data,error}=await client.rpc('p112_checkin',{p_reservation_id:reservationId,p_ip_note:'front-end unavailable',p_user_agent:navigator.userAgent});
+  if(error){p112Msg($('msg'),error.message,'error')}else{p112Msg($('msg'),data?.message||'簽到完成。若單位要求，請拍照 email 給管理者。','ok'); loadMyReservations();}
+}
+function prepareCheckout(id){ $('checkoutReservationId').value=id; loadWorkItems(); }
+async function loadWorkItems(){
+  const u=p112GetUnit(); const {data,error}=await client.from('p112_work_items').select('item_id,item_name,standard,p112_work_categories(category_name)').eq('unit_id',u.unit_id).eq('is_active',true).order('display_order');
+  if(error){p112Msg($('msg'),error.message,'error');return}
+  $('workItemsBox').innerHTML=(data||[]).map(i=>`<label class="small"><input type="checkbox" class="workItem" value="${i.item_id}" style="width:auto"> <b>${i.p112_work_categories?.category_name||''}</b>｜${i.item_name}<br><span class="muted">${i.standard||''}</span></label>`).join('');
+}
+async function checkout(){
+  const ids=[...document.querySelectorAll('.workItem:checked')].map(x=>x.value);
+  const {data,error}=await client.rpc('p112_checkout',{p_reservation_id:$('checkoutReservationId').value,p_work_summary:$('workSummary').value,p_issue_report:$('issueReport').value,p_work_item_ids:ids,p_ip_note:'front-end unavailable',p_user_agent:navigator.userAgent});
+  if(error){p112Msg($('msg'),error.message,'error')}else{p112Msg($('msg'),data?.message||'簽退完成。','ok'); loadMyReservations(); loadMyHours();}
+}
+async function loadMyHours(){
+ const u=p112GetUnit(); if(!u.unit_id) return; const {data,error}=await client.rpc('p112_get_my_hours',{p_unit_id:u.unit_id}); if(!error) $('myHours').textContent=Number(data||0).toFixed(2);
+}
+init();
+</script></body></html>

@@ -1,73 +1,16 @@
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>P112 我來值班｜LabDuty</title>
-  <link rel="stylesheet" href="css/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js"></script>
-  <script src="js/supabaseClient.js"></script>
-  <script src="js/common.js"></script>
-</head>
-<body>
-  <header class="hero">
-    <div class="container">
-      <nav class="nav">
-        <div class="brand"><div class="brand-mark">P112</div><div>我來值班<br><span class="small">LabDuty Management System</span></div></div>
-        <div class="nav-links">
-          <a href="student.html">學生端</a>
-          <a href="admin.html">管理端</a>
-          <a href="display.html">現場碼看板</a>
-        </div>
-      </nav>
-      <div class="hero-grid">
-        <div>
-          <div class="tagline">Laboratory Duty Scheduling · Check-in · Work Logging</div>
-          <h1>值班不是打卡，<br>是責任紀錄。</h1>
-          <p class="lead">P112 用半小時預約、現場動態碼、工作項目清單與時數交易紀錄，協助實驗室管理輪值、待命、工作內容與累積時數。</p>
-        </div>
-        <div class="card">
-          <h2>登入</h2>
-          <p class="small">請使用管理員在 Supabase Auth Dashboard 建立的帳號登入。第一版不提供 Email 忘記密碼，密碼遺失請由管理員重設。</p>
-          <div id="loginMsg" class="notice hidden"></div>
-          <form id="loginForm">
-            <label>Email</label>
-            <input id="email" type="email" autocomplete="username" required>
-            <label>Password</label>
-            <input id="password" type="password" autocomplete="current-password" required>
-            <p><button class="primary" type="submit">登入系統</button></p>
-          </form>
-          <p class="small">尚未設定 config.js 時，本頁會無法連線 Supabase。請先依 docs/deployment_steps.md 操作。</p>
-        </div>
-      </div>
-    </div>
-  </header>
-  <main class="main">
-    <div class="container grid three">
-      <div class="card"><h3>現場動態碼</h3><p class="small">以 display 專用帳號與授權裝置 token 顯示現場碼，學生簽到與簽退都需輸入。</p></div>
-      <div class="card"><h3>工作項目清單</h3><p class="small">學生簽退時勾選環境整理、設備檢查、展示維護、專案協助或老師指定任務。</p></div>
-      <div class="card"><h3>時數交易紀錄</h3><p class="small">正常出勤、待命 10%、補位與人工調整都以交易形式留下原因。</p></div>
-    </div>
-  </main>
-  <footer class="footer"><div class="container">P112 LabDuty MVP · GitHub Pages + Supabase</div></footer>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>P112 我來值班｜LabDuty</title><link rel="stylesheet" href="assets/css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="assets/js/app.js"></script></head><body>
+<header class="topbar"><div class="brand">P112 我來值班 <small>Multi-Unit Duty Scheduling, Check-in, Work Logging, and Hour Tracking</small></div><nav class="nav"><a href="student.html">學生端</a><a href="admin.html">管理端</a><a href="display.html">現場碼 V2 預留</a></nav></header>
+<section class="hero"><span class="badge">V1｜多單位架構・Email 照片佐證・保留現場碼升級路徑</span><h1>把值班從「有沒有來」管理到<br><span class="gold">「在哪個單位、做了什麼、累積多少」</span></h1><p>P112 是一套可部署於 GitHub Pages、搭配 Supabase 的多單位值班管理系統。第一版不儲存照片、不啟用現場碼 token；學生完成系統簽到簽退後，依單位規則另寄照片給老師或主管作為人工佐證。</p></section>
+<main class="wrap"><div class="grid">
+<div class="card span-4"><h3>學生端</h3><p class="muted">預約正式值班或待命時段、簽到簽退、勾選工作項目、填寫摘要與異常回報、查看個人時數。</p><a class="btn" href="student.html">進入學生端</a></div>
+<div class="card span-4"><h3>管理端</h3><p class="muted">系統管理員建立單位；單位管理員管理成員、排班、工作清單、出勤紀錄、時數與 CSV 匯出。</p><a class="btn" href="admin.html">進入管理端</a></div>
+<div class="card span-4"><h3>V2 預留</h3><p class="muted">display 專用帳號、授權裝置 token、現場動態碼架構已在資料庫預留，第一版預設停用。</p><a class="btn secondary" href="display.html">查看看板佔位頁</a></div>
+<div class="card span-12"><h2>登入</h2><div id="msg" class="hidden"></div><div class="row"><div><label>Email</label><input id="email" type="email" placeholder="student@example.edu.tw"></div><div><label>密碼</label><input id="password" type="password" placeholder="Password"></div></div><div class="btnbar"><button class="btn" onclick="login()">登入</button><button class="btn secondary" onclick="p112SignOut()">登出</button></div><p class="small muted">第一版不啟用 Email 忘記密碼；若忘記密碼，請由管理員在 Supabase Auth 後台重設。</p></div>
+</div></main><footer class="footer">P112 LabDuty｜American policy institute style interface｜GitHub Pages + Supabase</footer>
 <script>
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (window.P112_CONFIG_ERROR) return P112.msg('loginMsg', window.P112_CONFIG_ERROR);
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const { error } = await P112.db.auth.signInWithPassword({ email, password });
-  if (error) return P112.msg('loginMsg', error.message);
-  try {
-    const profile = await P112.getProfile();
-    if (profile.role === 'admin') location.href = 'admin.html';
-    else if (profile.role === 'display') location.href = 'display.html';
-    else location.href = 'student.html';
-  } catch (err) {
-    P112.msg('loginMsg', '登入成功，但找不到 p112_profiles 對應資料。請管理員建立 profile。');
-  }
-});
-</script>
-</body>
-</html>
+let client; try{client=p112Init();}catch(e){p112Msg($('msg'),e.message,'error')}
+async function login(){
+  try{const {error}=await client.auth.signInWithPassword({email:$('email').value,password:$('password').value}); if(error) throw error; p112Msg($('msg'),'登入成功。請選擇學生端或管理端。','ok');}
+  catch(e){p112Msg($('msg'),e.message,'error')}
+}
+</script></body></html>

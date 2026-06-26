@@ -1,238 +1,214 @@
-# P112 我來值班：逐步部署指引
+# P112 LabDuty Multi-Unit V1 部署步驟
 
-本指引假設您使用：
-
-- GitHub Pages 作為靜態網站。
-- Supabase 作為 Auth + Database + SQL RPC。
-- 不使用 CLI / npx deploy。
-- 不使用 Edge Function 部署。
+以下步驟以 GitHub Pages + Supabase Dashboard 為主，不使用 CLI，也不使用 npx deploy。
 
 ---
 
-## Step 1：建立 Supabase Project
+## 一、建立 Supabase 專案
 
 1. 登入 Supabase。
 2. 建立新 Project。
 3. 記下：
    - Project URL
    - anon public key
-4. 到 Project Settings → API 可找到上述資訊。
+4. 前往 Authentication > Providers，確認 Email 登入啟用。
 
 ---
 
-## Step 2：執行 SQL
+## 二、執行 SQL
 
-1. 開啟 Supabase Dashboard。
-2. 進入 SQL Editor。
-3. 開啟本專案檔案：
+1. 進入 Supabase Dashboard。
+2. 開啟 SQL Editor。
+3. 打開本 ZIP 內的：
 
 ```text
 sql/p112_schema.sql
 ```
 
-4. 全部複製。
-5. 貼到 SQL Editor。
-6. 執行。
-
-執行後應建立：
-
-- `p112_profiles`
-- `p112_duty_slots`
-- `p112_reservations`
-- `p112_attendance_logs`
-- `p112_work_categories`
-- `p112_work_items`
-- `p112_hour_transactions`
-- `p112_lab_devices`
-- 以及所有 `p112_` 開頭的 RPC functions。
+4. 全部複製貼到 SQL Editor。
+5. 執行。
+6. 若沒有錯誤，資料表、RLS policy 與 RPC function 會建立完成。
 
 ---
 
-## Step 3：建立第一個管理員帳號
+## 三、建立第一個管理員帳號
 
-1. 到 Supabase Dashboard → Authentication → Users。
-2. 建立一個使用者，例如老師自己的 Email。
+1. 前往 Authentication > Users。
+2. 新增一個使用者，例如老師自己的 email。
 3. 複製該使用者的 User UID。
-4. 到 Table Editor → `p112_profiles` 新增一筆：
+4. 回到 SQL Editor，執行以下 SQL，請自行替換 UID 與 email：
 
-| 欄位 | 值 |
-|---|---|
-| id | 剛剛複製的 User UID |
-| email | 老師 Email |
-| full_name | 老師姓名 |
-| role | `admin` |
-| status | `active` |
-
-5. 回到網站 `index.html`，用該帳號登入。
+```sql
+insert into public.p112_profiles(user_id,email,display_name,system_role)
+values('YOUR-AUTH-USER-UUID','your@email','老師','system_admin')
+on conflict(user_id) do update
+set system_role='system_admin', display_name=excluded.display_name, email=excluded.email;
+```
 
 ---
 
-## Step 4：建立學生帳號
+## 四、設定網站 config.js
 
-對每位學生：
+1. 將 `config.sample.js` 複製成 `config.js`。
+2. 修改內容：
 
-1. 到 Supabase Authentication → Users 新增使用者。
-2. 設定初始密碼。
-3. 複製 User UID。
-4. 進入網站管理端 `admin.html`。
-5. 到「學生」頁籤建立 profile：
-   - User UUID
-   - Email
-   - 姓名
-   - 角色：`student`
-   - 狀態：`active`
-
-密碼遺失時，第一版不使用 Email 忘記密碼，請在 Supabase Authentication Dashboard 手動重設。
-
----
-
-## Step 5：建立 display 專用帳號
-
-1. 到 Supabase Authentication → Users 新增一個帳號，例如：
-
-```text
-display01@example.com
-```
-
-2. 複製 User UID。
-3. 到管理端或 Table Editor 建立 profile：
-
-| 欄位 | 值 |
-|---|---|
-| id | display 帳號的 User UID |
-| email | display 帳號 Email |
-| full_name | 實驗室看板機 |
-| role | `display` |
-| status | `active` |
-
----
-
-## Step 6：設定 config.js
-
-1. 到 `js/` 資料夾。
-2. 複製：
-
-```text
-config.sample.js
-```
-
-3. 重新命名為：
-
-```text
-config.js
-```
-
-4. 填入 Supabase URL 與 anon key：
-
-```javascript
+```js
 window.P112_CONFIG = {
-  SUPABASE_URL: "https://YOUR-PROJECT-ID.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR-SUPABASE-ANON-KEY",
-  APP_NAME: "P112 我來值班",
-  TIMEZONE: "Asia/Taipei"
+  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
+  SUPABASE_ANON_KEY: "YOUR-SUPABASE-ANON-KEY"
 };
 ```
 
-重要：之後若重新產生新版程式，請保留自己的 `config.js`，不要覆蓋。
+3. 注意：
+   - 本系統只提供 `config.sample.js`。
+   - 日後重新產生新版時，不應覆蓋您自己的 `config.js`。
+   - 若 GitHub repository 是公開的，請自行評估是否公開 anon key；Supabase anon key 本來可用於前端，但 RLS 必須正確啟用。
 
 ---
 
-## Step 7：上傳 GitHub Pages
+## 五、部署到 GitHub Pages
 
-1. 建立 GitHub repository。
-2. 將整個 `P112_LabDuty_MVP` 資料夾內的檔案上傳。
-3. 確認包含：
+1. 建立 GitHub repository，例如：
+
+```text
+P112_LabDuty_MultiUnit_V1
+```
+
+2. 上傳 ZIP 解壓縮後資料夾中的所有檔案。
+3. 確認 repository 根目錄有：
 
 ```text
 index.html
 student.html
 admin.html
-display.html
-css/
-js/
+config.js
+assets/
 sql/
 docs/
 readme.md
 ```
 
-4. 到 repository Settings → Pages。
-5. Source 選擇 `Deploy from a branch`。
-6. Branch 選擇 `main` / root。
+4. 到 GitHub repository > Settings > Pages。
+5. Source 選擇：Deploy from a branch。
+6. Branch 選擇：main / root。
 7. 儲存。
-8. 等待 GitHub Pages 產生網址。
+8. 等待 GitHub Pages 發布。
 
 ---
 
-## Step 8：建立值班時段
+## 六、第一次使用流程
 
-1. 以 admin 登入網站。
-2. 進入 `admin.html`。
-3. 到「時段」頁籤。
-4. 選擇日期、開始時間、結束時間、間隔分鐘。
-5. 按「批次建立時段」。
-
-第一版預設每半小時為一格。
+1. 開啟網站首頁 `index.html`。
+2. 使用 system_admin 帳號登入。
+3. 進入管理端 `admin.html`。
+4. 建立第一個單位，例如「智慧商情研究室」。
+5. 設定照片寄送信箱。
+6. 建立學生帳號：
+   - 到 Supabase Auth 建立學生使用者。
+   - 到 SQL Editor 新增學生 profile。
+7. 在管理端以學生 email 加入單位。
+8. 建立時段。
+9. 建立工作分類與工作項目。
+10. 學生登入後即可預約、簽到、簽退。
 
 ---
 
-## Step 9：註冊實驗室看板機
+## 七、新增學生 profile 範例
 
-請在「實驗室現場那台電腦或平板」操作。
+建立 Auth 使用者後，複製 UID，執行：
 
-1. 在看板機上開啟網站。
-2. 用 admin 帳號登入。
-3. 進入 `admin.html`。
-4. 到「看板裝置」頁籤。
-5. 輸入裝置名稱，例如：
-
-```text
-實驗室看板機01
+```sql
+insert into public.p112_profiles(user_id,email,display_name,system_role)
+values('STUDENT-AUTH-USER-UUID','student@example.edu.tw','王小明','user')
+on conflict(user_id) do update
+set email=excluded.email, display_name=excluded.display_name;
 ```
 
-6. 按「註冊本機」。
-7. 系統會把 device token 存到該瀏覽器 localStorage。
-8. 登出 admin。
-9. 用 display 帳號登入 `display.html`。
-10. 若授權成功，就會看到六位數現場碼。
+接著在管理端用 email 把學生加入單位。
 
 ---
 
-## Step 10：學生使用流程
+## 八、建議的第一批工作分類
 
-1. 學生登入 `student.html`。
-2. 查看可預約時段。
-3. 預約正式值班或待命。
-4. 到實驗室後，看現場碼看板。
-5. 在學生端輸入六位數現場碼簽到。
-6. 工作完成後，輸入新的現場碼簽退。
-7. 勾選工作項目。
-8. 填寫工作摘要。
-9. 填寫異常回報，若無則填「無」。
-10. 系統自動產生出勤時數交易。
+可在管理端建立：
+
+1. 環境整理
+2. 設備檢查
+3. 展示維護
+4. 專案協助
+5. 老師指定任務
 
 ---
 
-## Step 11：管理者查看紀錄
+## 九、建議的第一批工作項目
 
-管理者可在 `admin.html` 查看：
+### 環境整理
 
-- 學生 profile。
-- 開放時段。
-- 工作分類與工作項目。
-- 出勤與工作紀錄。
-- 異常紀錄。
-- 學生累積時數。
-- 看板裝置最後連線時間。
+- 桌面整理：桌面無垃圾，公共物品歸位。
+- 白板整理：保留指定內容，其餘擦除；白板筆與板擦歸位。
+- 垃圾處理：垃圾桶滿 80% 以上需打包並更換垃圾袋。
+
+### 設備檢查
+
+- 公共電腦檢查：確認可開機、可連網、可登入展示頁面。
+- 展示螢幕檢查：指定專案頁面可正常顯示，無錯誤畫面。
+
+### 專案協助
+
+- P101 展示維護
+- P104 WhisperTour 測試
+- P109 請小聲喔測試
+- P110 SmoothRide 資料整理
+- P112 系統測試
 
 ---
 
-## Step 12：重要維護提醒
+## 十、V1 的照片 email 操作建議
 
-- 不要公開 `config.js` 以外的敏感金鑰；本系統只使用 anon key，不使用 service role key。
-- service role key 絕對不要放到 GitHub Pages。
-- 若看板機無法顯示現場碼，先檢查：
-  1. 是否用 display 帳號登入。
-  2. 該瀏覽器是否曾由 admin 註冊為看板裝置。
-  3. `p112_lab_devices` 中該裝置是否 `is_active = true`。
-  4. config.js 是否正確。
-- 若學生登入後看不到資料，檢查 `p112_profiles` 是否有對應該 Auth user id。
+若單位啟用照片 email 佐證，學生簽到後請寄信給單位設定的信箱。
+
+建議主旨：
+
+```text
+P112簽到照片｜單位名稱｜姓名｜日期時間
+```
+
+系統不會自動檢查 email 是否送達。此設計是第一版簡化策略。
+
+---
+
+## 十一、V2 預留功能說明
+
+資料庫已保留：
+
+- `p112_lab_devices`
+- `p112_lab_code_audit`
+- `p112_get_display_code()`
+- `display.html`
+
+但 V1 不建議啟用。若未來要防止宿舍打卡，可升級為：
+
+```text
+display 專用帳號 + 授權裝置 token + 現場動態碼
+```
+
+---
+
+## 十二、常見問題
+
+### 1. 為什麼不做忘記密碼 email？
+
+第一版為降低複雜度，密碼重設由管理員在 Supabase Auth 後台處理。
+
+### 2. 為什麼不在系統內上傳照片？
+
+避免隱私、儲存、權限與刪除管理問題。第一版改由學生 email 給老師或主管。
+
+### 3. 同一學生可以加入多個單位嗎？
+
+可以。`p112_unit_members` 支援同一位使用者加入多個單位。
+
+### 4. 不同單位的時數會混在一起嗎？
+
+不會。所有時段、預約、簽到、時數紀錄都有 `unit_id`。
+

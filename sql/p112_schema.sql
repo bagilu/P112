@@ -1,382 +1,243 @@
--- P112 我來值班 / LabDuty MVP
--- Supabase SQL Editor 一次貼上執行。
--- 注意：請先在 Supabase Dashboard 建立 Auth 使用者，再於 p112_profiles 建立對應角色。
+-- P112 LabDuty Multi-Unit V1 Schema - fixed clean install
+-- GitHub Pages + Supabase
+-- Run this file in Supabase Dashboard > SQL Editor.
+-- All tables/functions use p112_ prefix.
+-- IMPORTANT for early testing: this script drops existing P112 tables/functions first.
+-- If you already have real P112 data, back it up before running this file.
 
 create extension if not exists pgcrypto;
 
--- ---------- helper ----------
-create or replace function public.p112_touch_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
+-- ---------- clean reset for P112 objects ----------
+drop function if exists public.p112_is_system_admin(uuid) cascade;
+drop function if exists public.p112_is_unit_manager(uuid,uuid) cascade;
+drop function if exists public.p112_is_unit_member(uuid,uuid) cascade;
+drop function if exists public.p112_get_my_units() cascade;
+drop function if exists public.p112_create_unit(text,text,text) cascade;
+drop function if exists public.p112_add_unit_member_by_email(uuid,text,text) cascade;
+drop function if exists public.p112_generate_slots(uuid,date,time,time,int) cascade;
+drop function if exists public.p112_make_reservation(uuid,uuid,text) cascade;
+drop function if exists public.p112_get_my_reservations(uuid) cascade;
+drop function if exists public.p112_checkin(uuid,text,text) cascade;
+drop function if exists public.p112_checkout(uuid,text,text,uuid[],text,text) cascade;
+drop function if exists public.p112_get_my_hours(uuid) cascade;
+drop function if exists public.p112_admin_attendance_report(uuid) cascade;
+drop function if exists public.p112_admin_hours_report(uuid) cascade;
+drop function if exists public.p112_get_display_code(uuid) cascade;
 
--- ---------- core tables ----------
-create table if not exists public.p112_profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  full_name text not null,
-  role text not null check (role in ('student','admin','display')) default 'student',
-  status text not null check (status in ('active','inactive')) default 'active',
-  student_code text,
-  note text,
+drop table if exists public.p112_lab_code_audit cascade;
+drop table if exists public.p112_lab_devices cascade;
+drop table if exists public.p112_hour_transactions cascade;
+drop table if exists public.p112_attendance_work_items cascade;
+drop table if exists public.p112_work_items cascade;
+drop table if exists public.p112_work_categories cascade;
+drop table if exists public.p112_attendance_logs cascade;
+drop table if exists public.p112_reservations cascade;
+drop table if exists public.p112_duty_slots cascade;
+drop table if exists public.p112_unit_settings cascade;
+drop table if exists public.p112_unit_members cascade;
+drop table if exists public.p112_units cascade;
+drop table if exists public.p112_profiles cascade;
+
+-- ---------- tables ----------
+create table public.p112_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text unique not null,
+  display_name text not null,
+  system_role text not null default 'user' check (system_role in ('system_admin','user')),
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-drop trigger if exists trg_p112_profiles_updated_at on public.p112_profiles;
-create trigger trg_p112_profiles_updated_at before update on public.p112_profiles
-for each row execute function public.p112_touch_updated_at();
-
-create table if not exists public.p112_settings (
-  setting_key text primary key,
-  setting_value text not null,
-  note text,
-  updated_at timestamptz not null default now()
-);
-
-insert into public.p112_settings(setting_key, setting_value, note)
-values ('lab_code_secret', encode(gen_random_bytes(32), 'hex'), 'P112 現場動態碼秘密值，請勿提供給學生。')
-on conflict (setting_key) do nothing;
-
-create table if not exists public.p112_duty_slots (
-  id uuid primary key default gen_random_uuid(),
-  slot_date date not null,
-  start_at timestamptz not null,
-  end_at timestamptz not null,
-  max_regular int not null default 1,
-  max_standby int not null default 1,
-  status text not null check (status in ('open','closed','cancelled')) default 'open',
-  note text,
+create table public.p112_units (
+  unit_id uuid primary key default gen_random_uuid(),
+  unit_name text not null,
+  unit_type text not null default 'lab' check (unit_type in ('lab','office','center','company','project','other')),
+  description text,
+  contact_email text,
+  photo_email text,
+  timezone text not null default 'Asia/Taipei',
+  is_active boolean not null default true,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint p112_slot_time_check check (end_at > start_at),
-  constraint p112_slot_unique unique (start_at, end_at)
+  updated_at timestamptz not null default now()
 );
 
-drop trigger if exists trg_p112_duty_slots_updated_at on public.p112_duty_slots;
-create trigger trg_p112_duty_slots_updated_at before update on public.p112_duty_slots
-for each row execute function public.p112_touch_updated_at();
+create table public.p112_unit_members (
+  unit_member_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role_in_unit text not null default 'worker' check (role_in_unit in ('unit_admin','supervisor','worker')),
+  member_status text not null default 'active' check (member_status in ('active','inactive')),
+  joined_at timestamptz not null default now(),
+  unique(unit_id,user_id)
+);
 
-create table if not exists public.p112_reservations (
-  id uuid primary key default gen_random_uuid(),
-  slot_id uuid not null references public.p112_duty_slots(id) on delete cascade,
-  student_id uuid not null references public.p112_profiles(id) on delete cascade,
-  reservation_type text not null check (reservation_type in ('regular','standby')),
-  status text not null check (status in ('reserved','cancelled','completed','absent','replaced')) default 'reserved',
+create table public.p112_unit_settings (
+  unit_id uuid primary key references public.p112_units(unit_id) on delete cascade,
+  slot_minutes integer not null default 30 check (slot_minutes between 15 and 240),
+  allow_standby boolean not null default true,
+  standby_credit_rate numeric(5,2) not null default 0.10 check (standby_credit_rate >= 0 and standby_credit_rate <= 1),
+  require_work_items boolean not null default true,
+  require_work_summary boolean not null default true,
+  require_photo_email boolean not null default true,
+  photo_email text,
+  photo_email_instruction text default '請於簽到後拍攝現場工作照片，並以 email 寄給單位管理者。建議主旨：P112簽到照片｜單位名稱｜姓名｜日期時間',
+  checkin_grace_minutes integer not null default 10,
+  checkout_grace_minutes integer not null default 10,
+  enable_lab_code boolean not null default false,
+  enable_device_token boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+create table public.p112_duty_slots (
+  slot_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  slot_date date not null,
+  start_time time not null,
+  end_time time not null,
+  status text not null default 'open' check (status in ('open','closed','cancelled')),
+  created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
-  cancelled_at timestamptz,
-  note text
+  unique(unit_id,slot_date,start_time,end_time),
+  check (end_time > start_time)
 );
 
-create unique index if not exists p112_one_regular_per_slot
-on public.p112_reservations(slot_id)
-where reservation_type = 'regular' and status = 'reserved';
+create table public.p112_reservations (
+  reservation_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  slot_id uuid not null references public.p112_duty_slots(slot_id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  reservation_type text not null check (reservation_type in ('regular','standby')),
+  status text not null default 'reserved' check (status in ('reserved','checked_in','completed','absent','cancelled','replaced')),
+  created_at timestamptz not null default now(),
+  cancelled_at timestamptz
+);
 
-create unique index if not exists p112_one_standby_per_slot
-on public.p112_reservations(slot_id)
-where reservation_type = 'standby' and status = 'reserved';
+create unique index p112_reservations_one_active_type_per_slot
+  on public.p112_reservations(slot_id, reservation_type)
+  where status in ('reserved','checked_in','completed');
 
-create unique index if not exists p112_one_reservation_per_student_slot_type
-on public.p112_reservations(slot_id, student_id, reservation_type)
-where status = 'reserved';
-
-create table if not exists public.p112_attendance_logs (
-  id uuid primary key default gen_random_uuid(),
-  reservation_id uuid references public.p112_reservations(id) on delete set null,
-  slot_id uuid references public.p112_duty_slots(id) on delete set null,
-  student_id uuid not null references public.p112_profiles(id) on delete cascade,
-  checkin_time timestamptz,
-  checkout_time timestamptz,
-  checkin_code_input text,
-  checkin_code_status text check (checkin_code_status in ('valid_current','valid_previous','valid_next','invalid','manual','not_checked')),
-  checkout_code_input text,
-  checkout_code_status text check (checkout_code_status in ('valid_current','valid_previous','valid_next','invalid','manual','not_checked')),
-  checkin_ip text,
-  checkout_ip text,
+create table public.p112_attendance_logs (
+  attendance_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  reservation_id uuid not null references public.p112_reservations(reservation_id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  checkin_at timestamptz,
+  checkout_at timestamptz,
+  checkin_ip_note text,
+  checkout_ip_note text,
   checkin_user_agent text,
   checkout_user_agent text,
+  lab_code_status text default 'not_required',
+  photo_email_required boolean default true,
+  photo_email_recipient text,
   work_summary text,
   issue_report text,
-  status text not null check (status in ('checked_in','checked_out','abnormal','void')) default 'checked_in',
   abnormal_flag boolean not null default false,
   abnormal_reason text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique(reservation_id)
 );
 
-drop trigger if exists trg_p112_attendance_logs_updated_at on public.p112_attendance_logs;
-create trigger trg_p112_attendance_logs_updated_at before update on public.p112_attendance_logs
-for each row execute function public.p112_touch_updated_at();
-
-create table if not exists public.p112_work_categories (
-  id uuid primary key default gen_random_uuid(),
+create table public.p112_work_categories (
+  category_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
   category_name text not null,
   description text,
-  display_order int not null default 100,
+  display_order integer not null default 100,
   is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  created_at timestamptz not null default now()
 );
 
-drop trigger if exists trg_p112_work_categories_updated_at on public.p112_work_categories;
-create trigger trg_p112_work_categories_updated_at before update on public.p112_work_categories
-for each row execute function public.p112_touch_updated_at();
-
-create table if not exists public.p112_work_items (
-  id uuid primary key default gen_random_uuid(),
-  category_id uuid not null references public.p112_work_categories(id) on delete cascade,
+create table public.p112_work_items (
+  item_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  category_id uuid references public.p112_work_categories(category_id) on delete set null,
   item_name text not null,
   standard text,
-  estimated_minutes int default 30,
+  estimated_minutes integer,
   is_required boolean not null default false,
   requires_approval boolean not null default false,
+  display_order integer not null default 100,
   is_active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  created_at timestamptz not null default now()
 );
 
-drop trigger if exists trg_p112_work_items_updated_at on public.p112_work_items;
-create trigger trg_p112_work_items_updated_at before update on public.p112_work_items
-for each row execute function public.p112_touch_updated_at();
-
-create table if not exists public.p112_attendance_work_items (
+create table public.p112_attendance_work_items (
   id uuid primary key default gen_random_uuid(),
-  attendance_log_id uuid not null references public.p112_attendance_logs(id) on delete cascade,
-  work_item_id uuid not null references public.p112_work_items(id) on delete restrict,
+  attendance_id uuid not null references public.p112_attendance_logs(attendance_id) on delete cascade,
+  item_id uuid not null references public.p112_work_items(item_id) on delete cascade,
   note text,
   completed boolean not null default true,
   created_at timestamptz not null default now(),
-  unique(attendance_log_id, work_item_id)
+  unique(attendance_id,item_id)
 );
 
-create table if not exists public.p112_hour_transactions (
-  id uuid primary key default gen_random_uuid(),
-  student_id uuid not null references public.p112_profiles(id) on delete cascade,
-  attendance_log_id uuid references public.p112_attendance_logs(id) on delete set null,
-  reservation_id uuid references public.p112_reservations(id) on delete set null,
-  slot_id uuid references public.p112_duty_slots(id) on delete set null,
+create table public.p112_hour_transactions (
+  transaction_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  reservation_id uuid references public.p112_reservations(reservation_id) on delete set null,
+  attendance_id uuid references public.p112_attendance_logs(attendance_id) on delete set null,
   hours_delta numeric(8,2) not null,
-  transaction_type text not null check (transaction_type in ('regular_attendance','standby_credit','standby_replacement','manual_adjustment','absence_penalty','correction')),
   reason text not null,
+  transaction_type text not null default 'attendance' check (transaction_type in ('attendance','standby_credit','manual_adjustment','absence_penalty')),
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.p112_lab_devices (
-  id uuid primary key default gen_random_uuid(),
+-- V2 reserved: display account + authorized device token + lab code
+create table public.p112_lab_devices (
+  device_id uuid primary key default gen_random_uuid(),
+  unit_id uuid not null references public.p112_units(unit_id) on delete cascade,
   device_name text not null,
-  device_token_hash text not null,
-  role text not null default 'display' check (role = 'display'),
+  device_token_hash text,
   is_active boolean not null default true,
   registered_by uuid references auth.users(id),
+  registered_at timestamptz not null default now(),
   last_seen_at timestamptz,
-  last_ip text,
-  user_agent text,
-  note text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  last_ip_note text,
+  note text
 );
 
-drop trigger if exists trg_p112_lab_devices_updated_at on public.p112_lab_devices;
-create trigger trg_p112_lab_devices_updated_at before update on public.p112_lab_devices
-for each row execute function public.p112_touch_updated_at();
+create table public.p112_lab_code_audit (
+  audit_id uuid primary key default gen_random_uuid(),
+  unit_id uuid references public.p112_units(unit_id) on delete cascade,
+  device_id uuid references public.p112_lab_devices(device_id) on delete set null,
+  event_type text not null,
+  event_note text,
+  created_at timestamptz not null default now()
+);
 
--- ---------- seed work items ----------
-insert into public.p112_work_categories(category_name, description, display_order) values
-('環境整理', '打掃、桌面、白板、垃圾、物品歸位。', 10),
-('設備檢查', '公共電腦、螢幕、網路、展示設備、麥克風與線材。', 20),
-('展示維護', '專案展示頁面、QR Code、海報與實驗室展示資訊。', 30),
-('專案協助', 'P101–P112 等專案測試、資料整理與記錄。', 40),
-('老師指定任務', '老師或管理者臨時交辦之工作。', 50)
-on conflict do nothing;
-
-insert into public.p112_work_items(category_id, item_name, standard, estimated_minutes)
-select c.id, x.item_name, x.standard, x.estimated_minutes
-from public.p112_work_categories c
-join (values
-('環境整理','桌面整理','桌面無垃圾、紙杯、食物包裝；公共物品歸位。',30),
-('環境整理','白板整理','保留指定內容，其餘擦除；白板筆與板擦歸位。',15),
-('環境整理','垃圾與回收檢查','垃圾桶滿 80% 以上需打包；回收物分類放置。',15),
-('設備檢查','公共電腦與螢幕檢查','確認展示電腦與螢幕可正常顯示，無錯誤畫面。',30),
-('設備檢查','網路連線檢查','確認實驗室主要展示頁面可開啟。',15),
-('展示維護','專案展示頁面確認','確認指定專案頁面可正常顯示，QR Code 可掃描。',30),
-('專案協助','專案資料整理','依指定專案整理測試紀錄、表格或文字資料。',30),
-('老師指定任務','老師指定任務','依老師或管理者指定內容執行，需於摘要中說明。',30)
-) as x(category_name, item_name, standard, estimated_minutes)
-on c.category_name = x.category_name
-where not exists (select 1 from public.p112_work_items wi where wi.category_id = c.id and wi.item_name = x.item_name);
-
--- ---------- functions ----------
-create or replace function public.p112_current_role()
-returns text
-language sql
-security definer
-set search_path = public
-as $$
-  select role from public.p112_profiles where id = auth.uid() and status = 'active';
+-- ---------- helper functions ----------
+create or replace function public.p112_is_system_admin(p_user uuid default auth.uid())
+returns boolean language sql stable security definer set search_path=public as $$
+  select exists(select 1 from public.p112_profiles where user_id=p_user and system_role='system_admin' and is_active=true);
 $$;
 
-create or replace function public.p112_is_admin()
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select coalesce(public.p112_current_role() = 'admin', false);
-$$;
-
-create or replace function public.p112_lab_code_bucket(p_time timestamptz default now())
-returns timestamptz
-language sql
-stable
-as $$
-  select to_timestamp(floor(extract(epoch from p_time) / 300) * 300)::timestamptz;
-$$;
-
-create or replace function public.p112_generate_lab_code(p_bucket timestamptz default public.p112_lab_code_bucket(now()))
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  secret text;
-  hx text;
-  n bigint;
-begin
-  select setting_value into secret from public.p112_settings where setting_key = 'lab_code_secret';
-  if secret is null then
-    raise exception 'P112 lab_code_secret not found';
-  end if;
-  hx := encode(digest(secret || '|' || to_char(p_bucket at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'sha256'), 'hex');
-  n := ('x' || substr(hx, 1, 8))::bit(32)::bigint;
-  return lpad((n % 1000000)::text, 6, '0');
-end;
-$$;
-
-create or replace function public.p112_verify_lab_code(p_input text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  cleaned text := regexp_replace(coalesce(p_input,''), '\\D', '', 'g');
-  b timestamptz := public.p112_lab_code_bucket(now());
-  c_prev text := public.p112_generate_lab_code(b - interval '5 minutes');
-  c_now text := public.p112_generate_lab_code(b);
-  c_next text := public.p112_generate_lab_code(b + interval '5 minutes');
-  status text := 'invalid';
-begin
-  if cleaned = c_now then status := 'valid_current';
-  elsif cleaned = c_prev then status := 'valid_previous';
-  elsif cleaned = c_next then status := 'valid_next';
-  end if;
-  return jsonb_build_object(
-    'valid', status <> 'invalid',
-    'status', status,
-    'bucket_start', b,
-    'bucket_end', b + interval '5 minutes'
+create or replace function public.p112_is_unit_manager(p_unit_id uuid, p_user uuid default auth.uid())
+returns boolean language sql stable security definer set search_path=public as $$
+  select public.p112_is_system_admin(p_user) or exists(
+    select 1 from public.p112_unit_members
+    where unit_id=p_unit_id and user_id=p_user and role_in_unit in ('unit_admin','supervisor') and member_status='active'
   );
-end;
 $$;
 
-create or replace function public.p112_get_display_code(p_device_id uuid, p_device_token text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  token_hash text := encode(digest(coalesce(p_device_token,''), 'sha256'), 'hex');
-  dev public.p112_lab_devices%rowtype;
-  b timestamptz := public.p112_lab_code_bucket(now());
-  code text;
-  sec_remaining int;
-begin
-  select * into dev
-  from public.p112_lab_devices
-  where id = p_device_id
-    and device_token_hash = token_hash
-    and is_active = true;
-
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'device_not_authorized');
-  end if;
-
-  update public.p112_lab_devices
-  set last_seen_at = now(), updated_at = now()
-  where id = p_device_id;
-
-  code := public.p112_generate_lab_code(b);
-  sec_remaining := greatest(0, extract(epoch from ((b + interval '5 minutes') - now()))::int);
-
-  return jsonb_build_object(
-    'ok', true,
-    'code', code,
-    'valid_from', b,
-    'valid_until', b + interval '5 minutes',
-    'seconds_remaining', sec_remaining,
-    'device_name', dev.device_name
+create or replace function public.p112_is_unit_member(p_unit_id uuid, p_user uuid default auth.uid())
+returns boolean language sql stable security definer set search_path=public as $$
+  select public.p112_is_unit_manager(p_unit_id,p_user) or exists(
+    select 1 from public.p112_unit_members
+    where unit_id=p_unit_id and user_id=p_user and member_status='active'
   );
-end;
-$$;
-
-create or replace view public.p112_student_hour_summary as
-select
-  p.id as student_id,
-  p.full_name,
-  p.email,
-  p.student_code,
-  coalesce(sum(h.hours_delta), 0)::numeric(8,2) as total_hours
-from public.p112_profiles p
-left join public.p112_hour_transactions h on h.student_id = p.id
-where p.role = 'student'
-group by p.id, p.full_name, p.email, p.student_code;
-
-create or replace function public.p112_create_slots(
-  p_date date,
-  p_start_time time,
-  p_end_time time,
-  p_interval_minutes int default 30
-)
-returns int
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  current_start timestamptz;
-  current_end timestamptz;
-  final_end timestamptz;
-  created_count int := 0;
-begin
-  if not public.p112_is_admin() then
-    raise exception 'Only admin can create slots';
-  end if;
-  current_start := (p_date::text || ' ' || p_start_time::text || '+08')::timestamptz;
-  final_end := (p_date::text || ' ' || p_end_time::text || '+08')::timestamptz;
-  while current_start < final_end loop
-    current_end := current_start + make_interval(mins => p_interval_minutes);
-    insert into public.p112_duty_slots(slot_date, start_at, end_at, created_by)
-    values (p_date, current_start, current_end, auth.uid())
-    on conflict (start_at, end_at) do nothing;
-    if found then created_count := created_count + 1; end if;
-    current_start := current_end;
-  end loop;
-  return created_count;
-end;
 $$;
 
 -- ---------- RLS ----------
 alter table public.p112_profiles enable row level security;
-alter table public.p112_settings enable row level security;
+alter table public.p112_units enable row level security;
+alter table public.p112_unit_members enable row level security;
+alter table public.p112_unit_settings enable row level security;
 alter table public.p112_duty_slots enable row level security;
 alter table public.p112_reservations enable row level security;
 alter table public.p112_attendance_logs enable row level security;
@@ -385,89 +246,228 @@ alter table public.p112_work_items enable row level security;
 alter table public.p112_attendance_work_items enable row level security;
 alter table public.p112_hour_transactions enable row level security;
 alter table public.p112_lab_devices enable row level security;
+alter table public.p112_lab_code_audit enable row level security;
 
--- Drop policies for re-runnable script.
-do $$
-declare r record;
+create policy p112_profiles_self_or_admin on public.p112_profiles for select using (user_id=auth.uid() or public.p112_is_system_admin());
+create policy p112_profiles_admin_all on public.p112_profiles for all using (public.p112_is_system_admin()) with check (public.p112_is_system_admin());
+
+create policy p112_units_member_select on public.p112_units for select using (public.p112_is_unit_member(unit_id) or public.p112_is_system_admin());
+create policy p112_units_system_admin_all on public.p112_units for all using (public.p112_is_system_admin()) with check (public.p112_is_system_admin());
+
+create policy p112_unit_members_select on public.p112_unit_members for select using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+create policy p112_unit_members_manager_all on public.p112_unit_members for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+
+create policy p112_unit_settings_member_select on public.p112_unit_settings for select using (public.p112_is_unit_member(unit_id));
+create policy p112_unit_settings_manager_all on public.p112_unit_settings for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+
+create policy p112_slots_member_select on public.p112_duty_slots for select using (public.p112_is_unit_member(unit_id));
+create policy p112_slots_manager_all on public.p112_duty_slots for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+
+create policy p112_reservations_member_select on public.p112_reservations for select using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+create policy p112_reservations_member_insert on public.p112_reservations for insert with check (user_id=auth.uid() and public.p112_is_unit_member(unit_id));
+create policy p112_reservations_self_update on public.p112_reservations for update using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id)) with check (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+
+create policy p112_attendance_member_select on public.p112_attendance_logs for select using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+create policy p112_attendance_self_insert on public.p112_attendance_logs for insert with check (user_id=auth.uid() and public.p112_is_unit_member(unit_id));
+create policy p112_attendance_self_update on public.p112_attendance_logs for update using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id)) with check (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+
+create policy p112_categories_member_select on public.p112_work_categories for select using (public.p112_is_unit_member(unit_id));
+create policy p112_categories_manager_all on public.p112_work_categories for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+create policy p112_items_member_select on public.p112_work_items for select using (public.p112_is_unit_member(unit_id));
+create policy p112_items_manager_all on public.p112_work_items for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+
+create policy p112_attendance_items_select on public.p112_attendance_work_items for select using (
+  exists(select 1 from public.p112_attendance_logs a where a.attendance_id=public.p112_attendance_work_items.attendance_id and (a.user_id=auth.uid() or public.p112_is_unit_manager(a.unit_id)))
+);
+create policy p112_attendance_items_insert on public.p112_attendance_work_items for insert with check (
+  exists(select 1 from public.p112_attendance_logs a where a.attendance_id=public.p112_attendance_work_items.attendance_id and (a.user_id=auth.uid() or public.p112_is_unit_manager(a.unit_id)))
+);
+
+create policy p112_hours_select on public.p112_hour_transactions for select using (user_id=auth.uid() or public.p112_is_unit_manager(unit_id));
+create policy p112_hours_manager_all on public.p112_hour_transactions for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+
+create policy p112_devices_manager_all on public.p112_lab_devices for all using (public.p112_is_unit_manager(unit_id)) with check (public.p112_is_unit_manager(unit_id));
+create policy p112_code_audit_manager_select on public.p112_lab_code_audit for select using (public.p112_is_unit_manager(unit_id));
+
+-- ---------- application functions ----------
+create or replace function public.p112_get_my_units()
+returns table(unit_id uuid, unit_name text, role_in_unit text, system_role text)
+language sql stable security definer set search_path=public as $$
+  select u.unit_id,u.unit_name,m.role_in_unit,p.system_role
+  from public.p112_unit_members m
+  join public.p112_units u on u.unit_id=m.unit_id
+  join public.p112_profiles p on p.user_id=m.user_id
+  where m.user_id=auth.uid() and m.member_status='active' and u.is_active=true
+  union
+  select u.unit_id,u.unit_name,'system_admin'::text,p.system_role
+  from public.p112_units u, public.p112_profiles p
+  where p.user_id=auth.uid() and p.system_role='system_admin' and p.is_active=true and u.is_active=true
+  order by unit_name;
+$$;
+grant execute on function public.p112_get_my_units() to authenticated;
+
+create or replace function public.p112_create_unit(p_unit_name text, p_unit_type text default 'lab', p_photo_email text default null)
+returns uuid language plpgsql security definer set search_path=public as $$
+declare v_unit uuid;
 begin
-  for r in select schemaname, tablename, policyname from pg_policies where schemaname='public' and tablename like 'p112_%' loop
-    execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
-  end loop;
+  if not public.p112_is_system_admin() then raise exception 'Only system_admin can create units.'; end if;
+  insert into public.p112_units(unit_name,unit_type,photo_email,created_by) values(p_unit_name,coalesce(p_unit_type,'lab'),p_photo_email,auth.uid()) returning unit_id into v_unit;
+  insert into public.p112_unit_settings(unit_id,photo_email,require_photo_email) values(v_unit,p_photo_email,true);
+  insert into public.p112_unit_members(unit_id,user_id,role_in_unit) values(v_unit,auth.uid(),'unit_admin');
+  return v_unit;
 end $$;
+grant execute on function public.p112_create_unit(text,text,text) to authenticated;
 
-create policy p112_profiles_select_self_or_admin on public.p112_profiles
-for select using (id = auth.uid() or public.p112_is_admin());
-create policy p112_profiles_admin_all on public.p112_profiles
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
-create policy p112_profiles_update_self_basic on public.p112_profiles
-for update using (id = auth.uid()) with check (id = auth.uid());
+create or replace function public.p112_add_unit_member_by_email(p_unit_id uuid, p_email text, p_role_in_unit text default 'worker')
+returns uuid language plpgsql security definer set search_path=public as $$
+declare v_user uuid; v_id uuid;
+begin
+  if not public.p112_is_unit_manager(p_unit_id) then raise exception 'No permission for this unit.'; end if;
+  select user_id into v_user from public.p112_profiles where lower(email)=lower(p_email) and is_active=true;
+  if v_user is null then raise exception 'Profile not found. Create Supabase Auth user and p112_profiles row first.'; end if;
+  insert into public.p112_unit_members(unit_id,user_id,role_in_unit) values(p_unit_id,v_user,p_role_in_unit)
+  on conflict(unit_id,user_id) do update set role_in_unit=excluded.role_in_unit, member_status='active'
+  returning unit_member_id into v_id;
+  return v_id;
+end $$;
+grant execute on function public.p112_add_unit_member_by_email(uuid,text,text) to authenticated;
 
-create policy p112_slots_select_active on public.p112_duty_slots
-for select using (auth.uid() is not null);
-create policy p112_slots_admin_all on public.p112_duty_slots
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_generate_slots(p_unit_id uuid, p_slot_date date, p_start_time time, p_end_time time, p_slot_minutes int default 30)
+returns int language plpgsql security definer set search_path=public as $$
+declare t time := p_start_time; n int := 0; next_t time;
+begin
+  if not public.p112_is_unit_manager(p_unit_id) then raise exception 'No permission.'; end if;
+  while t < p_end_time loop
+    next_t := (t + make_interval(mins => p_slot_minutes))::time;
+    exit when next_t > p_end_time;
+    insert into public.p112_duty_slots(unit_id,slot_date,start_time,end_time,created_by)
+    values(p_unit_id,p_slot_date,t,next_t,auth.uid()) on conflict do nothing;
+    n := n + 1; t := next_t;
+  end loop;
+  return n;
+end $$;
+grant execute on function public.p112_generate_slots(uuid,date,time,time,int) to authenticated;
 
-create policy p112_reservations_select_self_or_admin on public.p112_reservations
-for select using (student_id = auth.uid() or public.p112_is_admin());
-create policy p112_reservations_student_insert_self on public.p112_reservations
-for insert with check (student_id = auth.uid());
-create policy p112_reservations_student_update_self on public.p112_reservations
-for update using (student_id = auth.uid()) with check (student_id = auth.uid());
-create policy p112_reservations_admin_all on public.p112_reservations
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_make_reservation(p_unit_id uuid, p_slot_id uuid, p_reservation_type text)
+returns uuid language plpgsql security definer set search_path=public as $$
+declare v_id uuid; v_allow boolean; v_slot_unit uuid;
+begin
+  if not public.p112_is_unit_member(p_unit_id) then raise exception 'Not a member of this unit.'; end if;
+  if p_reservation_type not in ('regular','standby') then raise exception 'Invalid reservation type.'; end if;
+  select unit_id into v_slot_unit from public.p112_duty_slots where slot_id=p_slot_id and status='open';
+  if v_slot_unit is null or v_slot_unit <> p_unit_id then raise exception 'Slot not found in this unit.'; end if;
+  select allow_standby into v_allow from public.p112_unit_settings where unit_id=p_unit_id;
+  if p_reservation_type='standby' and coalesce(v_allow,true)=false then raise exception 'Standby is disabled for this unit.'; end if;
+  insert into public.p112_reservations(unit_id,slot_id,user_id,reservation_type)
+  values(p_unit_id,p_slot_id,auth.uid(),p_reservation_type) returning reservation_id into v_id;
+  return v_id;
+end $$;
+grant execute on function public.p112_make_reservation(uuid,uuid,text) to authenticated;
 
-create policy p112_attendance_select_self_or_admin on public.p112_attendance_logs
-for select using (student_id = auth.uid() or public.p112_is_admin());
-create policy p112_attendance_insert_self on public.p112_attendance_logs
-for insert with check (student_id = auth.uid());
-create policy p112_attendance_update_self on public.p112_attendance_logs
-for update using (student_id = auth.uid()) with check (student_id = auth.uid());
-create policy p112_attendance_admin_all on public.p112_attendance_logs
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_get_my_reservations(p_unit_id uuid)
+returns table(reservation_id uuid, slot_date date, start_time time, end_time time, reservation_type text, status text)
+language sql stable security definer set search_path=public as $$
+  select r.reservation_id,s.slot_date,s.start_time,s.end_time,r.reservation_type,r.status
+  from public.p112_reservations r join public.p112_duty_slots s on s.slot_id=r.slot_id
+  where r.unit_id=p_unit_id and r.user_id=auth.uid() and r.status <> 'cancelled'
+  order by s.slot_date desc, s.start_time desc;
+$$;
+grant execute on function public.p112_get_my_reservations(uuid) to authenticated;
 
-create policy p112_work_categories_select_auth on public.p112_work_categories
-for select using (auth.uid() is not null);
-create policy p112_work_categories_admin_all on public.p112_work_categories
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_checkin(p_reservation_id uuid, p_ip_note text default null, p_user_agent text default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record; st record; v_att uuid;
+begin
+  select * into r from public.p112_reservations where reservation_id=p_reservation_id and user_id=auth.uid();
+  if r.reservation_id is null then raise exception 'Reservation not found.'; end if;
+  select * into st from public.p112_unit_settings where unit_id=r.unit_id;
+  insert into public.p112_attendance_logs(unit_id,reservation_id,user_id,checkin_at,checkin_ip_note,checkin_user_agent,photo_email_required,photo_email_recipient)
+  values(r.unit_id,r.reservation_id,auth.uid(),now(),p_ip_note,p_user_agent,coalesce(st.require_photo_email,true),coalesce(st.photo_email,(select photo_email from public.p112_units where unit_id=r.unit_id)))
+  on conflict(reservation_id) do update set checkin_at=coalesce(public.p112_attendance_logs.checkin_at,now()), checkin_ip_note=p_ip_note, checkin_user_agent=p_user_agent
+  returning attendance_id into v_att;
+  update public.p112_reservations set status='checked_in' where reservation_id=p_reservation_id;
+  return jsonb_build_object('attendance_id',v_att,'message','簽到完成。若本單位要求照片佐證，請依頁面提示以 email 傳送照片給管理者。','photo_email',coalesce(st.photo_email,(select photo_email from public.p112_units where unit_id=r.unit_id)));
+end $$;
+grant execute on function public.p112_checkin(uuid,text,text) to authenticated;
 
-create policy p112_work_items_select_auth on public.p112_work_items
-for select using (auth.uid() is not null);
-create policy p112_work_items_admin_all on public.p112_work_items
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_checkout(p_reservation_id uuid, p_work_summary text default null, p_issue_report text default null, p_work_item_ids uuid[] default '{}', p_ip_note text default null, p_user_agent text default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record; a record; st record; v_hours numeric; v_item uuid;
+begin
+  select * into r from public.p112_reservations where reservation_id=p_reservation_id and user_id=auth.uid();
+  if r.reservation_id is null then raise exception 'Reservation not found.'; end if;
+  select * into st from public.p112_unit_settings where unit_id=r.unit_id;
+  select * into a from public.p112_attendance_logs where reservation_id=p_reservation_id;
+  if a.attendance_id is null then raise exception 'Please check in first.'; end if;
+  if st.require_work_summary and coalesce(length(trim(p_work_summary)),0)=0 then raise exception 'Work summary is required.'; end if;
+  if st.require_work_items and (p_work_item_ids is null or array_length(p_work_item_ids,1) is null) then raise exception 'At least one work item is required.'; end if;
+  update public.p112_attendance_logs set checkout_at=now(), checkout_ip_note=p_ip_note, checkout_user_agent=p_user_agent, work_summary=p_work_summary, issue_report=p_issue_report, updated_at=now() where attendance_id=a.attendance_id;
+  if p_work_item_ids is not null then
+    foreach v_item in array p_work_item_ids loop
+      insert into public.p112_attendance_work_items(attendance_id,item_id) values(a.attendance_id,v_item) on conflict do nothing;
+    end loop;
+  end if;
+  select round((extract(epoch from ((s.slot_date + s.end_time) - (s.slot_date + s.start_time)))/3600.0)::numeric,2) into v_hours from public.p112_duty_slots s where s.slot_id=r.slot_id;
+  update public.p112_reservations set status='completed' where reservation_id=p_reservation_id;
+  delete from public.p112_hour_transactions where reservation_id=p_reservation_id and transaction_type in ('attendance','standby_credit');
+  insert into public.p112_hour_transactions(unit_id,user_id,reservation_id,attendance_id,hours_delta,reason,transaction_type,created_by)
+  values(r.unit_id,auth.uid(),r.reservation_id,a.attendance_id,v_hours,'completed duty attendance','attendance',auth.uid());
+  return jsonb_build_object('message','簽退完成，已產生時數紀錄。','hours',v_hours);
+end $$;
+grant execute on function public.p112_checkout(uuid,text,text,uuid[],text,text) to authenticated;
 
-create policy p112_att_work_select_self_or_admin on public.p112_attendance_work_items
-for select using (
-  public.p112_is_admin() or exists (
-    select 1 from public.p112_attendance_logs l where l.id = attendance_log_id and l.student_id = auth.uid()
-  )
-);
-create policy p112_att_work_insert_self on public.p112_attendance_work_items
-for insert with check (
-  exists (select 1 from public.p112_attendance_logs l where l.id = attendance_log_id and l.student_id = auth.uid())
-);
-create policy p112_att_work_admin_all on public.p112_attendance_work_items
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_get_my_hours(p_unit_id uuid)
+returns numeric language sql stable security definer set search_path=public as $$
+  select coalesce(sum(hours_delta),0) from public.p112_hour_transactions where unit_id=p_unit_id and user_id=auth.uid();
+$$;
+grant execute on function public.p112_get_my_hours(uuid) to authenticated;
 
-create policy p112_hours_select_self_or_admin on public.p112_hour_transactions
-for select using (student_id = auth.uid() or public.p112_is_admin());
-create policy p112_hours_admin_all on public.p112_hour_transactions
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
-create policy p112_hours_insert_self_checked_out on public.p112_hour_transactions
-for insert with check (student_id = auth.uid());
+create or replace function public.p112_admin_attendance_report(p_unit_id uuid)
+returns table(display_name text,email text,reservation_id uuid,slot_date date,start_time time,end_time time,reservation_type text,status text,checkin_at timestamptz,checkout_at timestamptz,work_summary text,issue_report text)
+language plpgsql stable security definer set search_path=public as $$
+begin
+ if not public.p112_is_unit_manager(p_unit_id) then raise exception 'No permission.'; end if;
+ return query
+ select p.display_name,p.email,r.reservation_id,s.slot_date,s.start_time,s.end_time,r.reservation_type,r.status,a.checkin_at,a.checkout_at,a.work_summary,a.issue_report
+ from public.p112_reservations r
+ join public.p112_profiles p on p.user_id=r.user_id
+ join public.p112_duty_slots s on s.slot_id=r.slot_id
+ left join public.p112_attendance_logs a on a.reservation_id=r.reservation_id
+ where r.unit_id=p_unit_id
+ order by s.slot_date desc,s.start_time desc,p.display_name;
+end $$;
+grant execute on function public.p112_admin_attendance_report(uuid) to authenticated;
 
-create policy p112_lab_devices_admin_all on public.p112_lab_devices
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+create or replace function public.p112_admin_hours_report(p_unit_id uuid)
+returns table(display_name text,email text,total_hours numeric)
+language plpgsql stable security definer set search_path=public as $$
+begin
+ if not public.p112_is_unit_manager(p_unit_id) then raise exception 'No permission.'; end if;
+ return query
+ select p.display_name,p.email,coalesce(sum(h.hours_delta),0) as total_hours
+ from public.p112_unit_members m
+ join public.p112_profiles p on p.user_id=m.user_id
+ left join public.p112_hour_transactions h on h.unit_id=m.unit_id and h.user_id=m.user_id
+ where m.unit_id=p_unit_id and m.member_status='active'
+ group by p.display_name,p.email
+ order by total_hours desc,p.display_name;
+end $$;
+grant execute on function public.p112_admin_hours_report(uuid) to authenticated;
 
--- Settings remain admin-readable only.
-create policy p112_settings_admin_select on public.p112_settings
-for select using (public.p112_is_admin());
-create policy p112_settings_admin_all on public.p112_settings
-for all using (public.p112_is_admin()) with check (public.p112_is_admin());
+-- V2 placeholder function. Do not enable in V1 unless you intentionally turn on lab code.
+create or replace function public.p112_get_display_code(p_unit_id uuid)
+returns text language plpgsql security definer set search_path=public as $$
+declare v_hex text; v_num numeric;
+begin
+  if not public.p112_is_unit_manager(p_unit_id) then raise exception 'V2 display code requires authorized display setup.'; end if;
+  v_hex := substr(encode(digest(p_unit_id::text || date_trunc('minute',now())::text,'sha256'),'hex'),1,8);
+  v_num := mod(('x' || v_hex)::bit(32)::bigint, 1000000);
+  return lpad(v_num::int::text,6,'0');
+end $$;
+grant execute on function public.p112_get_display_code(uuid) to authenticated;
 
--- Grants for RPC and tables.
-grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on all tables in schema public to authenticated;
-grant execute on function public.p112_verify_lab_code(text) to authenticated;
-grant execute on function public.p112_get_display_code(uuid, text) to authenticated;
-grant execute on function public.p112_create_slots(date, time, time, int) to authenticated;
-grant execute on function public.p112_generate_lab_code(timestamptz) to authenticated;
+-- ---------- seed note ----------
+-- After creating an Auth user for yourself, insert or update your profile as system_admin:
+-- insert into public.p112_profiles(user_id,email,display_name,system_role)
+-- values('YOUR-AUTH-USER-UUID','your@email','老師','system_admin')
+-- on conflict(user_id) do update set system_role='system_admin', display_name=excluded.display_name, email=excluded.email;
