@@ -280,7 +280,16 @@ begin
   return query select u.user_id, u.email, u.display_name, u.system_role, u.is_active from public."TblP112Users" u order by u.display_name;
 end $$;
 
-create or replace function public.p112_create_duty_slot(p_token text, p_unit_id uuid, p_slot_date date, p_start_time time, p_end_time time, p_note text default null)
+create or replace function public.p112_create_duty_slot(
+  p_token text,
+  p_unit_id uuid,
+  p_slot_date date,
+  p_start_time time,
+  p_end_time time,
+  p_note text default null,
+  p_regular_capacity integer default 1,
+  p_standby_capacity integer default 1
+)
 returns jsonb
 language plpgsql
 security definer
@@ -290,15 +299,34 @@ declare v_actor uuid; v_slot uuid;
 begin
   v_actor := public.p112_session_user_id(p_token);
   if not public.p112_has_unit_role(v_actor, p_unit_id, array['unit_admin','supervisor']) then raise exception 'Permission denied.'; end if;
-  insert into public."TblP112DutySlots"(unit_id, slot_date, start_time, end_time, note, created_by)
-  values(p_unit_id, p_slot_date, p_start_time, p_end_time, p_note, v_actor)
-  on conflict(unit_id, slot_date, start_time, end_time) do update set is_open=true, note=excluded.note
+  if coalesce(p_regular_capacity,0) < 0 or coalesce(p_standby_capacity,0) < 0 then
+    raise exception 'Capacity cannot be negative.';
+  end if;
+  insert into public."TblP112DutySlots"(unit_id, slot_date, start_time, end_time, regular_capacity, standby_capacity, note, created_by)
+  values(p_unit_id, p_slot_date, p_start_time, p_end_time, coalesce(p_regular_capacity,1), coalesce(p_standby_capacity,1), p_note, v_actor)
+  on conflict(unit_id, slot_date, start_time, end_time) do update set
+    is_open=true,
+    note=excluded.note,
+    regular_capacity=excluded.regular_capacity,
+    standby_capacity=excluded.standby_capacity
   returning slot_id into v_slot;
   return jsonb_build_object('ok', true, 'slot_id', v_slot);
 end $$;
 
 create or replace function public.p112_get_slots(p_token text, p_unit_id uuid, p_from date default current_date, p_to date default current_date + 14)
-returns table(slot_id uuid, slot_date date, start_time time, end_time time, regular_user text, standby_user text, is_open boolean)
+returns table(
+  slot_id uuid,
+  slot_date date,
+  start_time time,
+  end_time time,
+  regular_user text,
+  standby_user text,
+  regular_count integer,
+  standby_count integer,
+  regular_capacity integer,
+  standby_capacity integer,
+  is_open boolean
+)
 language plpgsql
 security definer
 set search_path = public
@@ -309,14 +337,18 @@ begin
   if not public.p112_has_unit_role(v_actor, p_unit_id, array['unit_admin','supervisor','worker']) then raise exception 'Permission denied.'; end if;
   return query
   select s.slot_id, s.slot_date, s.start_time, s.end_time,
-    max(case when r.reservation_type='regular' and r.status in ('reserved','checked_in','completed') then u.display_name end) as regular_user,
-    max(case when r.reservation_type='standby' and r.status in ('reserved','checked_in','completed') then u.display_name end) as standby_user,
+    coalesce(string_agg(u.display_name, '、' order by u.display_name) filter (where r.reservation_type='regular'), '') as regular_user,
+    coalesce(string_agg(u.display_name, '、' order by u.display_name) filter (where r.reservation_type='standby'), '') as standby_user,
+    count(r.reservation_id) filter (where r.reservation_type='regular')::integer as regular_count,
+    count(r.reservation_id) filter (where r.reservation_type='standby')::integer as standby_count,
+    s.regular_capacity,
+    s.standby_capacity,
     s.is_open
   from public."TblP112DutySlots" s
   left join public."TblP112Reservations" r on r.slot_id=s.slot_id and r.status in ('reserved','checked_in','completed')
   left join public."TblP112Users" u on u.user_id=r.user_id
   where s.unit_id=p_unit_id and s.slot_date between p_from and p_to
-  group by s.slot_id, s.slot_date, s.start_time, s.end_time, s.is_open
+  group by s.slot_id, s.slot_date, s.start_time, s.end_time, s.regular_capacity, s.standby_capacity, s.is_open
   order by s.slot_date, s.start_time;
 end $$;
 
@@ -326,18 +358,42 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare v_actor uuid; v_unit uuid; v_res uuid;
+declare
+  v_actor uuid;
+  v_unit uuid;
+  v_res uuid;
+  v_capacity integer;
+  v_current integer;
 begin
   v_actor := public.p112_session_user_id(p_token);
   if v_actor is null then raise exception 'Invalid or expired session.'; end if;
   if p_reservation_type not in ('regular','standby') then raise exception 'Invalid reservation_type.'; end if;
-  select unit_id into v_unit from public."TblP112DutySlots" where slot_id=p_slot_id and is_open=true;
+
+  select unit_id,
+         case when p_reservation_type='regular' then regular_capacity else standby_capacity end
+    into v_unit, v_capacity
+  from public."TblP112DutySlots"
+  where slot_id=p_slot_id and is_open=true;
+
   if v_unit is null then raise exception 'Slot not found or closed.'; end if;
   if not public.p112_has_unit_role(v_actor, v_unit, array['unit_admin','supervisor','worker']) then raise exception 'Permission denied.'; end if;
+
+  select count(*)::integer into v_current
+  from public."TblP112Reservations"
+  where slot_id=p_slot_id
+    and reservation_type=p_reservation_type
+    and status in ('reserved','checked_in','completed');
+
+  if v_current >= coalesce(v_capacity,0) then
+    raise exception 'This % slot is full. Capacity: %, current reservations: %.', p_reservation_type, v_capacity, v_current;
+  end if;
+
   insert into public."TblP112Reservations"(unit_id, slot_id, user_id, reservation_type)
   values(v_unit, p_slot_id, v_actor, p_reservation_type)
   returning reservation_id into v_res;
-  return jsonb_build_object('ok', true, 'reservation_id', v_res);
+  return jsonb_build_object('ok', true, 'reservation_id', v_res, 'capacity', v_capacity, 'current_after', v_current + 1);
+exception when unique_violation then
+  raise exception 'You already have an active % reservation for this slot.', p_reservation_type;
 end $$;
 
 create or replace function public.p112_get_my_reservations(p_token text, p_unit_id uuid default null)

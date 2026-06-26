@@ -63,10 +63,10 @@
       const data=await rpc('p112_get_slots',{p_token:token(),p_unit_id:unit,p_from:$('slotFrom').value,p_to:$('slotTo').value});
       for(const s of data){
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${s.slot_date}</td><td>${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}</td><td>${s.regular_user||'<span class="muted">空</span>'}</td><td>${s.standby_user||'<span class="muted">空</span>'}</td><td></td>`;
+        tr.innerHTML=`<td>${s.slot_date}</td><td>${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}</td><td>${s.regular_user||'<span class="muted">空</span>'}<br><span class="muted">${s.regular_count||0}/${s.regular_capacity||0}</span></td><td>${s.standby_user||'<span class="muted">空</span>'}<br><span class="muted">${s.standby_count||0}/${s.standby_capacity||0}</span></td><td></td>`;
         const td=tr.lastChild;
-        const b1=document.createElement('button'); b1.textContent='預約正式'; b1.disabled=!!s.regular_user; b1.onclick=()=>reserve(s.slot_id,'regular');
-        const b2=document.createElement('button'); b2.textContent='預約待命'; b2.className='secondary'; b2.disabled=!!s.standby_user; b2.onclick=()=>reserve(s.slot_id,'standby');
+        const b1=document.createElement('button'); b1.textContent='預約正式'; b1.disabled=(Number(s.regular_count||0) >= Number(s.regular_capacity||0)); b1.onclick=()=>reserve(s.slot_id,'regular');
+        const b2=document.createElement('button'); b2.textContent='預約待命'; b2.className='secondary'; b2.disabled=(Number(s.standby_count||0) >= Number(s.standby_capacity||0)); b2.onclick=()=>reserve(s.slot_id,'standby');
         td.append(b1,' ',b2); rows.appendChild(tr);
       }
     }catch(e){ alert(e.message); }
@@ -123,7 +123,7 @@
     }catch(e){ msg('adminMsg','讀取使用者失敗：'+e.message,true); }
   }
   async function addMember(){ try{ await rpc('p112_add_unit_member',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_user_id:$('memberUserSelect').value,p_unit_role:$('memberRole').value}); msg('adminMsg','已加入單位成員。'); }catch(e){ msg('adminMsg',e.message,true); } }
-  async function createSlot(){ try{ await rpc('p112_create_duty_slot',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_slot_date:$('slotDate').value,p_start_time:$('slotStart').value,p_end_time:$('slotEnd').value,p_note:$('slotNote').value}); msg('adminMsg','時段建立完成。'); }catch(e){ msg('adminMsg',e.message,true); } }
+  async function createSlot(){ try{ await rpc('p112_create_duty_slot',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_slot_date:$('slotDate').value,p_start_time:$('slotStart').value,p_end_time:$('slotEnd').value,p_note:$('slotNote').value,p_regular_capacity:Number($('regularCapacity').value||1),p_standby_capacity:Number($('standbyCapacity').value||0)}); msg('adminMsg','時段建立完成。'); }catch(e){ msg('adminMsg',e.message,true); } }
   async function addCategory(){ try{ const r=await rpc('p112_admin_add_work_category',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_category_name:$('categoryName').value,p_description:null}); $('categoryId').value=r.category_id; msg('adminMsg','分類建立完成，已填入 category_id。'); }catch(e){ msg('adminMsg',e.message,true); } }
   async function addWorkItem(){ try{ await rpc('p112_admin_add_work_item',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_category_id:$('categoryId').value||null,p_item_name:$('workItemName').value,p_standard:$('workItemStandard').value}); msg('adminMsg','工作項目建立完成。'); }catch(e){ msg('adminMsg',e.message,true); } }
   async function loadAdminHours(){ try{ const data=await rpc('p112_get_hour_summary',{p_token:token(),p_unit_id:$('adminUnitSelect').value}); const rows=$('hourRows'); rows.innerHTML=''; for(const h of data){ rows.insertAdjacentHTML('beforeend',`<tr><td>${h.unit_name}</td><td>${h.display_name}</td><td>${h.total_hours}</td></tr>`); }}catch(e){ msg('adminMsg',e.message,true); } }

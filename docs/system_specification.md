@@ -53,3 +53,23 @@ V1 不在系統內儲存照片。若單位設定 `photo_email`，學生簽到後
 - Tables: `TblP112...`
 - Functions: `p112_...`
 - CSS/JS 檔案：一般靜態檔命名
+
+## V1.1 多人同時出勤修正
+
+本版支援同一個時段安排多位正式出勤者與多位待命支援者。
+
+### 資料結構
+
+`TblP112DutySlots` 新增／使用以下欄位：
+
+- `regular_capacity`：正式出勤名額，預設 1。
+- `standby_capacity`：待命支援名額，預設 1；管理介面預設可設為 0。
+
+`TblP112Reservations` 不再限制同一時段只能有一位 `regular` 或一位 `standby`。系統改由 `p112_create_reservation()` 檢查容量。
+
+### 預約規則
+
+- 同一時段可有多位 `regular` 預約者，數量不得超過 `regular_capacity`。
+- 同一時段可有多位 `standby` 預約者，數量不得超過 `standby_capacity`。
+- 同一位使用者不可在同一時段重複建立同類型有效預約。
+- 每位出勤者各自簽到、簽退、勾選工作項目、填寫摘要，並各自產生時數交易紀錄。

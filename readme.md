@@ -94,3 +94,15 @@ select public.p112_bootstrap_sysadmin(
 - `docs/functions_list.md`
 
 若要一次安裝，執行 `sql/p112_schema.sql` 即可。若要分段安裝，請參考 `docs/functions_list.md`。
+
+
+## V1.1 更新：支援同一時段多人出勤
+
+本版將原本「一個時段一位正式值班者」的限制改為容量制。管理者建立時段時可設定：
+
+- 正式名額：`regular_capacity`
+- 待命名額：`standby_capacity`
+
+學生端會顯示「已預約人數 / 名額」，例如 `2/3`。只要尚未額滿，多位成員即可預約同一時段並各自簽到、簽退與累積時數。
+
+部署時請重新執行 `sql/p112_schema.sql`。此檔案包含 reset/drop 機制，會清除前版 `p112_` 與 `TblP112` 物件後重建；正式資料上線後請勿直接使用 reset 版 schema。

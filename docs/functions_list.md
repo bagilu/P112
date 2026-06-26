@@ -41,3 +41,9 @@
 - `p112_admin_add_work_item(token, unit_id, category_id, item_name, standard)`：新增工作項目。
 - `p112_get_hour_summary(token, unit_id)`：取得時數統計。
 - `p112_healthcheck()`：檢查 RPC 是否可用。
+
+## V1.1 多人容量相關 Functions
+
+- `p112_create_duty_slot(token, unit_id, slot_date, start_time, end_time, note, regular_capacity, standby_capacity)`：建立或更新工作／值班時段，並設定正式出勤名額與待命名額。
+- `p112_get_slots(token, unit_id, from, to)`：回傳時段清單，包含 `regular_count`、`standby_count`、`regular_capacity`、`standby_capacity`。
+- `p112_create_reservation(token, slot_id, reservation_type)`：建立預約前會檢查該類型容量是否已滿。

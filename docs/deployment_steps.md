@@ -108,3 +108,16 @@ Repository Settings → Pages → Deploy from branch → main / root。
 2. `sql/p112_tables_and_policies_only.sql`
 3. `sql/functions/p112_all_rpc_functions.sql`
 4. `sql/p112_bootstrap_example.sql`
+
+
+## V1.1 多人時段容量
+
+若您已安裝前一版，請在測試階段直接重新執行：
+
+```sql
+sql/p112_schema.sql
+```
+
+本版會重建資料表與 functions。重建後，請再次執行 bootstrap sysadmin SQL。
+
+建立時段時，管理端可以設定「正式名額」與「待命名額」。若正式名額為 2，同一時段即可有兩位正式出勤者各自打卡。

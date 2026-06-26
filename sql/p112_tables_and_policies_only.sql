@@ -130,8 +130,8 @@ create table public."TblP112DutySlots" (
   slot_date date not null,
   start_time time not null,
   end_time time not null,
-  max_regular integer not null default 1,
-  max_standby integer not null default 1,
+  regular_capacity integer not null default 1 check (regular_capacity >= 0),
+  standby_capacity integer not null default 1 check (standby_capacity >= 0),
   is_open boolean not null default true,
   note text,
   created_by uuid references public."TblP112Users"(user_id),
@@ -147,12 +147,11 @@ create table public."TblP112Reservations" (
   reservation_type text not null check (reservation_type in ('regular','standby')),
   status text not null default 'reserved' check (status in ('reserved','checked_in','completed','cancelled','absent','replaced')),
   created_at timestamptz not null default now(),
-  cancelled_at timestamptz,
-  unique(slot_id, user_id, reservation_type)
+  cancelled_at timestamptz
 );
 
-create unique index "IdxTblP112ReservationsOneActiveRegularOrStandby"
-  on public."TblP112Reservations"(slot_id, reservation_type)
+create unique index "IdxTblP112ReservationsOneActiveUserTypePerSlot"
+  on public."TblP112Reservations"(slot_id, user_id, reservation_type)
   where status in ('reserved','checked_in','completed');
 
 create table public."TblP112AttendanceLogs" (
