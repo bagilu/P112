@@ -1,10 +1,10 @@
 <!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>P112 我來值班</title><link rel="stylesheet" href="assets/css/style.css"></head><body data-page="login">
-<header><h1>P112 我來值班</h1><p>Multi-Unit Duty Scheduling, Check-in, Work Logging, and Hour Tracking System</p></header>
+<header><h1>P112 我來值班</h1><p>Lab Duty / Work Logging</p></header>
 <nav class="nav"><a href="index.html">登入</a><a href="student.html">學生端</a><a href="admin.html">管理端</a><a href="display.html">V2 看板預留</a></nav>
 <main class="wrap">
   <section class="hero">
-    <div class="card"><h2 class="hero-title">多單位值班、簽到與工作紀錄平台</h2><p class="muted">本版不使用 Supabase Authentication，改採 <strong>TblP112Users</strong> 與 <strong>TblP112Sessions</strong> 自建登入機制。照片不進資料庫，僅提示學生另寄 email 給管理者作為人工佐證。</p><div class="notice warn">第一次使用前，請先在 SQL Editor 執行 <code>sql/p112_schema.sql</code>，再執行 <code>p112_bootstrap_sysadmin()</code> 建立第一位 sysadmin。</div></div>
-    <div class="card login-box"><h2>登入</h2><label>Email</label><input id="loginEmail" type="email" placeholder="teacher@example.com"><label>Password</label><input id="loginPassword" type="password"><button id="loginBtn">登入</button><p id="loginMsg" class="muted"></p><hr><p class="small muted">本系統不使用 email reset。忘記密碼時，請由 sysadmin 在管理端重設。</p></div>
+    <div class="card"><h2 class="hero-title">Lab Duty / Work Logging</h2><p class="muted">登入後請選擇單位，進行排班、簽到簽退、工作紀錄與時數查詢。</p></div>
+    <div class="card login-box"><h2>登入</h2><label>Email</label><input id="loginEmail" type="email" placeholder="teacher@example.com"><label>Password</label><input id="loginPassword" type="password"><button id="loginBtn">登入</button><p id="loginMsg" class="muted"></p><hr><p class="small muted">忘記密碼時，請由系統管理員或單位管理者重設。</p></div>
   </section>
-</main><footer class="footer">P112 LabDuty｜American professional think-tank style UI</footer>
+</main><footer class="footer">P112 LabDuty | SBI Lab</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="assets/js/app.js"></script></body></html>

@@ -135,3 +135,14 @@ sql/p112_schema.sql
 然後重新上傳新版網站檔案，並用 `Ctrl + F5` 或網址加 `?v=adhoc-unitfix` 清除瀏覽器快取。
 
 若是全新安裝或測試資料可清除，則可直接執行新版 `sql/p112_schema.sql`。
+
+
+## 從 AdHocUnitFix 版升級到本版
+
+如果已經成功部署 `P112_LabDuty_Tbl_NoAuth_V1_AdHocUnitFix`，請：
+
+1. 在 Supabase SQL Editor 執行 `sql/p112_migration_admin_tools.sql`。
+2. 上傳新版網頁檔案。
+3. 用 `Ctrl + F5` 重新整理瀏覽器，避免載入舊版 `app.js`。
+
+本次升級不需要清空資料表。

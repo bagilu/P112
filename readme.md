@@ -1,4 +1,4 @@
-# P112 我來值班｜LabDuty Multi-Unit V1
+# P112 我來值班｜LabDuty V1
 
 ## 版本定位
 
@@ -114,3 +114,19 @@ select public.p112_bootstrap_sysadmin(
 - 學生切換單位時，系統會自動重新讀取該單位的時段、我的預約、工作項目與時數。
 - 新增 `p112_ad_hoc_checkin()`：允許未預約臨時簽到。系統會自動建立目前半小時的臨時時段與已簽到預約，並標記 `ad_hoc_checkin` 異常旗標供管理者確認。
 - 一般流程仍建議先預約再簽到；臨時簽到用於臨時支援、忘記預約或特殊任務。
+
+
+## 本版新增：管理端工具
+
+本版以 `P112_LabDuty_Tbl_NoAuth_V1_AdHocUnitFix` 為基準，新增：
+
+1. 管理端可讀取目前單位成員，並將成員退出該單位。退出採 `is_active=false`，不刪除歷史紀錄。
+2. 管理端可讀取目前單位值班時段，並刪除尚未有人預約、簽到或簽退的時段。
+3. 登入頁刪除較長的說明文字，底部改為 `P112 LabDuty | SBI Lab`。
+
+若資料庫已部署舊版，不需重跑完整 schema，可執行：
+
+```sql
+-- SQL Editor
+-- 執行 sql/p112_migration_admin_tools.sql
+```

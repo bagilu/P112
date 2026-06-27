@@ -119,7 +119,7 @@
     try{
       const me=await currentUser(); $('meBox').textContent=`${me.display_name}｜${me.email}｜${me.system_role}`;
       await loadUnits('adminUnitSelect'); await loadUsers();
-      $('createUnitBtn').onclick=createUnit; $('createUserBtn').onclick=createUser; $('loadUsersBtn').onclick=loadUsers; $('addMemberBtn').onclick=addMember; $('createSlotBtn').onclick=createSlot; $('addCategoryBtn').onclick=addCategory; $('addWorkItemBtn').onclick=addWorkItem; $('loadHoursBtn').onclick=loadAdminHours;
+      $('createUnitBtn').onclick=createUnit; $('createUserBtn').onclick=createUser; $('loadUsersBtn').onclick=loadUsers; $('addMemberBtn').onclick=addMember; $('createSlotBtn').onclick=createSlot; $('addCategoryBtn').onclick=addCategory; $('addWorkItemBtn').onclick=addWorkItem; $('loadHoursBtn').onclick=loadAdminHours; if($('loadMembersBtn')) $('loadMembersBtn').onclick=loadUnitMembers; if($('loadAdminSlotsBtn')) $('loadAdminSlotsBtn').onclick=loadAdminSlots; if($('adminUnitSelect')) $('adminUnitSelect').onchange=async()=>{ await loadUnitMembers(); await loadAdminSlots(); }; if($('adminSlotFrom')) $('adminSlotFrom').value=todayPlus(0); if($('adminSlotTo')) $('adminSlotTo').value=todayPlus(14); await loadUnitMembers(); await loadAdminSlots();
     }catch(e){ msg('adminMsg','管理端初始化失敗：'+e.message,true); }
   }
   async function createUnit(){ try{ await rpc('p112_create_unit',{p_token:token(),p_unit_name:$('newUnitName').value,p_unit_type:$('newUnitType').value,p_description:null,p_contact_email:null,p_photo_email:$('newUnitPhotoEmail').value}); msg('adminMsg','單位建立完成。'); await loadUnits('adminUnitSelect'); }catch(e){ msg('adminMsg',e.message,true); } }
@@ -129,8 +129,45 @@
       for(const u of data){ rows.insertAdjacentHTML('beforeend',`<tr><td>${u.display_name}</td><td>${u.email}</td><td>${u.system_role}</td><td>${u.is_active}</td><td class="small">${u.user_id}</td></tr>`); const opt=document.createElement('option'); opt.value=u.user_id; opt.textContent=`${u.display_name}｜${u.email}`; sel.appendChild(opt); }
     }catch(e){ msg('adminMsg','讀取使用者失敗：'+e.message,true); }
   }
-  async function addMember(){ try{ await rpc('p112_add_unit_member',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_user_id:$('memberUserSelect').value,p_unit_role:$('memberRole').value}); msg('adminMsg','已加入單位成員。'); }catch(e){ msg('adminMsg',e.message,true); } }
-  async function createSlot(){ try{ await rpc('p112_create_duty_slot',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_slot_date:$('slotDate').value,p_start_time:$('slotStart').value,p_end_time:$('slotEnd').value,p_note:$('slotNote').value,p_regular_capacity:Number($('regularCapacity').value||1),p_standby_capacity:Number($('standbyCapacity').value||0)}); msg('adminMsg','時段建立完成。'); }catch(e){ msg('adminMsg',e.message,true); } }
+  async function addMember(){ try{ await rpc('p112_add_unit_member',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_user_id:$('memberUserSelect').value,p_unit_role:$('memberRole').value}); msg('adminMsg','已加入單位成員。'); await loadUnitMembers(); }catch(e){ msg('adminMsg',e.message,true); } }
+  async function loadUnitMembers(){
+    const rows=$('memberRows'); if(!rows) return; rows.innerHTML='';
+    const unit=$('adminUnitSelect')?.value; if(!unit) return;
+    try{ const data=await rpc('p112_list_unit_members',{p_token:token(),p_unit_id:unit});
+      for(const m of data){
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${m.display_name}</td><td>${m.email}</td><td>${m.unit_role}</td><td>${m.is_active?'啟用':'已退出'}</td><td></td>`;
+        const td=tr.lastChild;
+        if(m.is_active){ const b=document.createElement('button'); b.className='danger'; b.textContent='退出單位'; b.onclick=()=>removeUnitMember(m.user_id, m.display_name); td.appendChild(b); }
+        rows.appendChild(tr);
+      }
+    }catch(e){ msg('adminMsg','讀取單位成員失敗：'+e.message,true); }
+  }
+  async function removeUnitMember(userId, name){
+    if(!confirm(`確定要將「${name}」退出目前單位？既有紀錄會保留，但該成員將不能再進入此單位。`)) return;
+    try{ await rpc('p112_remove_unit_member',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_user_id:userId}); msg('adminMsg','成員已退出目前單位。'); await loadUnitMembers(); }
+    catch(e){ msg('adminMsg','成員退出失敗：'+e.message,true); }
+  }
+  async function createSlot(){ try{ await rpc('p112_create_duty_slot',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_slot_date:$('slotDate').value,p_start_time:$('slotStart').value,p_end_time:$('slotEnd').value,p_note:$('slotNote').value,p_regular_capacity:Number($('regularCapacity').value||1),p_standby_capacity:Number($('standbyCapacity').value||0)}); msg('adminMsg','時段建立完成。'); await loadAdminSlots(); }catch(e){ msg('adminMsg',e.message,true); } }
+  async function loadAdminSlots(){
+    const rows=$('adminSlotRows'); if(!rows) return; rows.innerHTML='';
+    const unit=$('adminUnitSelect')?.value; if(!unit) return;
+    try{ const data=await rpc('p112_get_slots',{p_token:token(),p_unit_id:unit,p_from:$('adminSlotFrom')?.value || todayPlus(0),p_to:$('adminSlotTo')?.value || todayPlus(14)});
+      for(const s of data){
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${s.slot_date}</td><td>${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}</td><td>${s.regular_count||0}/${s.regular_capacity||0}</td><td>${s.standby_count||0}/${s.standby_capacity||0}</td><td>${s.is_open?'開放':'關閉'}</td><td></td>`;
+        const td=tr.lastChild;
+        const used=Number(s.regular_count||0)+Number(s.standby_count||0);
+        const b=document.createElement('button'); b.className='danger'; b.textContent='刪除時段'; b.disabled=used>0; b.onclick=()=>deleteDutySlot(s.slot_id, `${s.slot_date} ${s.start_time.slice(0,5)}-${s.end_time.slice(0,5)}`); td.appendChild(b);
+        rows.appendChild(tr);
+      }
+    }catch(e){ msg('adminMsg','讀取值班時段失敗：'+e.message,true); }
+  }
+  async function deleteDutySlot(slotId, label){
+    if(!confirm(`確定刪除時段「${label}」？只有尚未預約、簽到、簽退的時段可以刪除。`)) return;
+    try{ await rpc('p112_delete_duty_slot',{p_token:token(),p_slot_id:slotId}); msg('adminMsg','值班時段已刪除。'); await loadAdminSlots(); }
+    catch(e){ msg('adminMsg','刪除時段失敗：'+e.message,true); }
+  }
   async function addCategory(){ try{ const r=await rpc('p112_admin_add_work_category',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_category_name:$('categoryName').value,p_description:null}); $('categoryId').value=r.category_id; msg('adminMsg','分類建立完成，已填入 category_id。'); }catch(e){ msg('adminMsg',e.message,true); } }
   async function addWorkItem(){ try{ await rpc('p112_admin_add_work_item',{p_token:token(),p_unit_id:$('adminUnitSelect').value,p_category_id:$('categoryId').value||null,p_item_name:$('workItemName').value,p_standard:$('workItemStandard').value}); msg('adminMsg','工作項目建立完成。'); }catch(e){ msg('adminMsg',e.message,true); } }
   async function loadAdminHours(){ try{ const data=await rpc('p112_get_hour_summary',{p_token:token(),p_unit_id:$('adminUnitSelect').value}); const rows=$('hourRows'); rows.innerHTML=''; for(const h of data){ rows.insertAdjacentHTML('beforeend',`<tr><td>${h.unit_name}</td><td>${h.display_name}</td><td>${h.total_hours}</td></tr>`); }}catch(e){ msg('adminMsg',e.message,true); } }
